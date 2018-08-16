@@ -6,7 +6,7 @@
 #include <cassert>
 #include "hash-join/hash_functions.cuh"
 
-// TODO Inherit from managed class to allocated with managed memory
+// TODO Inherit from managed class to allocate with managed memory?
 class gdf_table 
 {
 
@@ -30,6 +30,83 @@ public:
   }
 
   ~gdf_table(){}
+
+    /* --------------------------------------------------------------------------*/
+    /** 
+     * @Synopsis  Checks for equality between a row in this table and another table.
+     * 
+     * @Param other The other table whose row is compared to this tables
+     * @Param my_row_index The row index of this table to compare
+     * @Param other_row_index The row index of the other table to compare
+     * 
+     * @Returns True if the elements in both rows are equivalent, otherwise False
+     */
+    /* ----------------------------------------------------------------------------*/
+  __device__
+  bool rows_equal(gdf_table const & other, 
+                  const size_t my_row_index, 
+                  const size_t other_row_index)
+  {
+
+    bool is_equal{true};
+
+    for(size_t i = 0; i < num_columns; ++i)
+    {
+      const gdf_dtype my_col_type = d_columns_types[i];
+      const gdf_dtype other_col_type = other.d_columns_types[i];
+      assert(my_col_type == other_col_type && "Attempted to compare columns of different types.");
+
+      switch(my_col_type)
+      {
+        case GDF_INT8:
+          {
+            using col_type = int8_t;
+            const col_type my_elem = static_cast<col_type*>(d_columns_data[i])[my_row_index];
+            const col_type other_elem = static_cast<col_type*>(other.d_columns_data[i])[other_row_index];
+            is_equal = (my_elem == other_elem);
+          }
+        case GDF_INT16:
+          {
+            using col_type = int16_t;
+            const col_type my_elem = static_cast<col_type*>(d_columns_data[i])[my_row_index];
+            const col_type other_elem = static_cast<col_type*>(other.d_columns_data[i])[other_row_index];
+            is_equal = (my_elem == other_elem);
+          }
+        case GDF_INT32:
+          {
+            using col_type = int32_t;
+            const col_type my_elem = static_cast<col_type*>(d_columns_data[i])[my_row_index];
+            const col_type other_elem = static_cast<col_type*>(other.d_columns_data[i])[other_row_index];
+            is_equal = (my_elem == other_elem);
+          }
+        case GDF_INT64:
+          {
+            using col_type = int64_t;
+            const col_type my_elem = static_cast<col_type*>(d_columns_data[i])[my_row_index];
+            const col_type other_elem = static_cast<col_type*>(other.d_columns_data[i])[other_row_index];
+            is_equal = (my_elem == other_elem);
+          }
+        case GDF_FLOAT32:
+          {
+            using col_type = float;
+            const col_type my_elem = static_cast<col_type*>(d_columns_data[i])[my_row_index];
+            const col_type other_elem = static_cast<col_type*>(other.d_columns_data[i])[other_row_index];
+            is_equal = (my_elem == other_elem);
+          }
+        case GDF_FLOAT64:
+          {
+            using col_type = double;
+            const col_type my_elem = static_cast<col_type*>(d_columns_data[i])[my_row_index];
+            const col_type other_elem = static_cast<col_type*>(other.d_columns_data[i])[other_row_index];
+            is_equal = (my_elem == other_elem);
+          }
+        default:
+          assert(false && "Attempted to compare unsupported GDF datatype");
+      }
+    }
+
+    return is_equal;
+  }
 
   /* --------------------------------------------------------------------------*/
   /** 
