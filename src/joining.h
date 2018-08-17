@@ -34,20 +34,20 @@
 /// \param[in] compute_ctx The CudaComputeContext to shedule this to.
 /// \return	   Array of matching rows
 template<JoinType join_type,
-  typename size_type,
-  typename col1_it,
-  typename col2_it,
-  typename col3_it,
-  typename comp_t>
+         typename size_type,
+         typename col1_it,
+         typename col2_it,
+         typename col3_it,
+         typename comp_t>
 mgpu::mem_t<size_type> join_hash(col1_it a, size_type a_count,
-	col1_it b, size_type b_count,
-	col2_it a2, col2_it b2,
-	col3_it a3, col3_it b3,
-	comp_t comp, mgpu::context_t& context)
+                                 col1_it b, size_type b_count,
+                                 col2_it a2, col2_it b2,
+                                 col3_it a3, col3_it b3,
+                                 comp_t comp, mgpu::context_t& context)
 {
   // here follows the custom code for hash-joins
-
   mgpu::mem_t<size_type> joined_output;
+
   // using the new low-level API for hash-join
   switch (join_type) {
       case JoinType::INNER_JOIN: InnerJoinHash(context, joined_output, a, a_count, b, b_count, a2, b2, a3, b3); break;
@@ -70,9 +70,9 @@ struct join_result : public join_result_base {
 
   join_result() : context(false) {}
   virtual void* data() {
-	return result.data();
+    return result.data();
   }
   virtual size_t size() {
-	return result.size();
+    return result.size();
   }
 };

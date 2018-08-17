@@ -16,6 +16,7 @@
 
 #include <gdf/gdf.h>
 #include <gdf/errorutils.h>
+#include <limits>
 
 #include "joining.h"
 
@@ -57,7 +58,7 @@ size_t gdf_join_result_size(gdf_join_result_type *result) {
 
 // Size limit due to use of int32 as join output.
 // FIXME: upgrade to 64-bit
-#define MAX_JOIN_SIZE (0xffffffffu)
+constexpr int MAX_JOIN_SIZE{std::numeric_limits<int>::max()};
 
 #define DEF_JOIN(Fn, T, Joiner)                                             \
 gdf_error gdf_##Fn(gdf_column *leftcol, gdf_column *rightcol,               \
@@ -100,7 +101,7 @@ DEF_OUTER_JOIN(f64, int64_t)
 
 #define JOIN_HASH_TYPES(T1, l1, r1, T2, l2, r2, T3, l3, r3) \
   result_ptr->result = join_hash<join_type>( \
-				(T1*)l1, (int)leftcol[0]->size, \
+                                (T1*)l1, (int)leftcol[0]->size, \
                                 (T1*)r1, (int)rightcol[0]->size, \
                                 (T2*)l2, (T2*)r2, \
                                 (T3*)l3, (T3*)r3, \
@@ -211,25 +212,14 @@ gdf_error sort_join_typed(gdf_column *leftcol, gdf_column *rightcol,
   using namespace mgpu;
   gdf_error err = GDF_SUCCESS;
 
-  if ( leftcol->dtype != rightcol->dtype) return GDF_UNSUPPORTED_DTYPE;
-  if ( leftcol->size >= MAX_JOIN_SIZE ) return GDF_COLUMN_SIZE_TOO_BIG;
-  if ( rightcol->size >= MAX_JOIN_SIZE ) return GDF_COLUMN_SIZE_TOO_BIG;
-
   std::unique_ptr<join_result<int> > result_ptr(new join_result<int>);
 
-  if (GDF_SORT != ctxt->flag_method) 
-  {
-    err = GDF_INVALID_API_CALL;
-  } 
-  else 
-  {
-    SortJoin<join_type> sort_based_join;
-    result_ptr->result = sort_based_join(static_cast<T*>(leftcol->data), leftcol->size,
-                                         static_cast<T*>(rightcol->data), rightcol->size,
-                                         less_t<T>(), result_ptr->context);
-    CUDA_CHECK_LAST();
-    *out_result = cffi_wrap(result_ptr.release());
-  } 
+  SortJoin<join_type> sort_based_join;
+  result_ptr->result = sort_based_join(static_cast<T*>(leftcol->data), leftcol->size,
+                                       static_cast<T*>(rightcol->data), rightcol->size,
+                                       less_t<T>(), result_ptr->context);
+  CUDA_CHECK_LAST();
+  *out_result = cffi_wrap(result_ptr.release());
 
   return err;
 }
@@ -238,6 +228,8 @@ template <JoinType join_type>
 gdf_error sort_join(gdf_column *leftcol, gdf_column *rightcol,
                     gdf_join_result_type **out_result, gdf_context *ctxt) 
 {
+
+  if(GDF_SORT != ctxt->flag_method) return GDF_INVALID_API_CALL;
 
   switch ( leftcol->dtype ){
     case GDF_INT8:    return sort_join_typed<join_type, int8_t>(leftcol, rightcol, out_result, ctxt);
@@ -272,6 +264,10 @@ gdf_error join_call( int num_cols, gdf_column **leftcol, gdf_column **rightcol,
   // and the same number of rows
   const auto left_col_size = leftcol[0]->size;
   const auto right_col_size = rightcol[0]->size;
+  
+  if(left_col_size >= MAX_JOIN_SIZE) return GDF_COLUMN_SIZE_TOO_BIG;
+  if(right_col_size >= MAX_JOIN_SIZE) return GDF_COLUMN_SIZE_TOO_BIG;
+
   for (int i = 0; i < num_cols; i++) {
     if(nullptr == rightcol[i]->data) return GDF_DATASET_EMPTY;
     if(nullptr == leftcol[i]->data) return GDF_DATASET_EMPTY;
