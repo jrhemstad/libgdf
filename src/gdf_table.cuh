@@ -12,15 +12,20 @@ class gdf_table
 
 public:
 
-  gdf_table(const size_t num_cols, const gdf_column ** gdf_columns) 
+  gdf_table(size_t num_cols, gdf_column ** gdf_columns) 
     : num_columns(num_cols), host_columns(gdf_columns)
   {
+
+    column_length = host_columns[0]->size;
+
     // Copy the pointers to the column's data and types to the device 
     // as contiguous arrays
     device_columns.reserve(num_cols);
     device_types.reserve(num_cols);
     for(size_t i = 0; i < num_cols; ++i)
     {
+      assert(column_length == host_columns[i]->size);
+
       device_columns.push_back(host_columns[i]->data);
       device_types.push_back(host_columns[i]->dtype);
     }
@@ -30,6 +35,21 @@ public:
   }
 
   ~gdf_table(){}
+
+  size_t get_column_length() const
+  {
+    return column_length;
+  }
+
+  gdf_dtype get_probe_gdf_dtype() const
+  {
+    return host_columns[probe_column_index]->dtype;
+  }
+
+  void * get_probe_column_data() const
+  {
+    return host_columns[probe_column_index]->data;
+  }
 
     /* --------------------------------------------------------------------------*/
     /** 
@@ -201,8 +221,12 @@ private:
   thrust::device_vector<void*> device_columns;
   thrust::device_vector<gdf_dtype> device_types;
 
-  const gdf_column ** host_columns;
+  gdf_column ** host_columns;
   const size_t num_columns;
+  size_t column_length;
+
+  // Just use the first column as the probe column for now
+  const size_t probe_column_index{0};
 
 };
 
