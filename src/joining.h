@@ -21,37 +21,53 @@
 
 #include "hash-join/join_compute_api.h"
 #include "sort-join.cuh"
+#include "gdf_table.cuh"
 
-// N-column join (N up to 3 currently)
-// \brief Performs a hash based join of columns a and b.
-///
-/// \param[in] a first column to join (left)
-/// \param[in] Number of element in a column (left)
-/// \param[in] b second column to join (right)
-/// \param[in] Number of element in b column (right)
-/// \param[in] additional columns to join (default == NULL)
-/// \param[in] Flag used to reorder the left and right column indices found in the join (default = false)
-/// \param[in] compute_ctx The CudaComputeContext to shedule this to.
-/// \return	   Array of matching rows
-template<JoinType join_type,
-         typename size_type,
-         typename col1_it,
-         typename col2_it,
-         typename col3_it,
-         typename comp_t>
-mgpu::mem_t<size_type> join_hash(col1_it a, size_type a_count,
-                                 col1_it b, size_type b_count,
-                                 col2_it a2, col2_it b2,
-                                 col3_it a3, col3_it b3,
-                                 comp_t comp, mgpu::context_t& context)
+template<JoinType join_type, typename output_type>
+mgpu::mem_t<output_type> join_hash(gdf_table const & left_table, 
+                                 gdf_table const & right_table, 
+                                 mgpu::context_t & context) 
 {
-  // here follows the custom code for hash-joins
-  mgpu::mem_t<size_type> joined_output;
+  mgpu::mem_t<output_type> joined_output;
 
-  // using the new low-level API for hash-join
-  switch (join_type) {
-      case JoinType::INNER_JOIN: InnerJoinHash(context, joined_output, a, a_count, b, b_count, a2, b2, a3, b3); break;
-      case JoinType::LEFT_JOIN: LeftJoinHash(context, joined_output, a, a_count, b, b_count, a2, b2, a3, b3); break;
+
+  const gdf_dtype key_type = left_table.get_probe_gdf_dtype();
+
+  switch(key_type)
+  {
+    case GDF_INT8:    
+      {
+        compute_hash_join<join_type, int8_t, output_type>(context, joined_output, left_table, right_table); 
+        break;
+      }
+    case GDF_INT16:   
+      {
+        compute_hash_join<join_type, int16_t, output_type>(context, joined_output, left_table, right_table); 
+        break;
+      }
+    case GDF_INT32:   
+      {
+        compute_hash_join<join_type, int32_t, output_type>(context, joined_output, left_table, right_table); 
+        break;
+      }
+    case GDF_INT64:   
+      {
+        compute_hash_join<join_type, int64_t, output_type>(context, joined_output, left_table, right_table);                    
+        break;
+      }
+    // For floating point types probe column, treat as an integral type
+    case GDF_FLOAT32: 
+      {
+        compute_hash_join<join_type, int32_t, output_type>(context, joined_output, left_table, right_table);
+        break;
+      }
+    case GDF_FLOAT64: 
+      {
+        compute_hash_join<join_type, int64_t, output_type>(context, joined_output, left_table, right_table);
+        break;
+      }
+    default:
+      assert(false && "Invalid probe column datatype.");
   }
 
   return joined_output;

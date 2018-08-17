@@ -19,6 +19,7 @@
 #include <limits>
 
 #include "joining.h"
+#include "gdf_table.cuh"
 
 using namespace mgpu;
 
@@ -58,7 +59,8 @@ size_t gdf_join_result_size(gdf_join_result_type *result) {
 
 // Size limit due to use of int32 as join output.
 // FIXME: upgrade to 64-bit
-constexpr int MAX_JOIN_SIZE{std::numeric_limits<int>::max()};
+using output_type = int;
+constexpr output_type MAX_JOIN_SIZE{std::numeric_limits<output_type>::max()};
 
 #define DEF_JOIN(Fn, T, Joiner)                                             \
 gdf_error gdf_##Fn(gdf_column *leftcol, gdf_column *rightcol,               \
@@ -145,30 +147,12 @@ template <JoinType join_type>
 gdf_error hash_join(int num_cols, gdf_column **leftcol, gdf_column **rightcol, gdf_join_result_type **out_result)
 {
 
-  // TODO: currently support up to 3 columns
-  if (num_cols > 3) return GDF_JOIN_TOO_MANY_COLUMNS;
-  for (int i = 0; i < num_cols; i++) {
-    if (leftcol[i]->dtype == N_GDF_TYPES ) return GDF_UNSUPPORTED_DTYPE;
-  }
+  gdf_table left_table(num_cols, leftcol);
+  gdf_table right_table(num_cols, rightcol);
 
-  std::unique_ptr<join_result<int> > result_ptr(new join_result<int>);
-  switch (num_cols) {
-  case 1:
-    JOIN_HASH_T1(leftcol[0]->dtype, leftcol[0]->data, rightcol[0]->data,
-		 GDF_INT32, NULL, NULL,
-		 GDF_INT32, NULL, NULL)
-    break;
-  case 2:
-    JOIN_HASH_T1(leftcol[0]->dtype, leftcol[0]->data, rightcol[0]->data,
-		 leftcol[1]->dtype, leftcol[1]->data, rightcol[1]->data,
-		 GDF_INT32, NULL, NULL)
-    break;
-  case 3:
-    JOIN_HASH_T1(leftcol[0]->dtype, leftcol[0]->data, rightcol[0]->data,
-		 leftcol[1]->dtype, leftcol[1]->data, rightcol[1]->data,
-		 leftcol[2]->dtype, leftcol[2]->data, rightcol[2]->data)
-    break;
-  }
+  std::unique_ptr<join_result<output_type> > result_ptr(new join_result<output_type>);
+
+  result_ptr->result = join_hash<join_type, output_type>(left_table, right_table, result_ptr->context);
 
   CUDA_CHECK_LAST();
   *out_result = cffi_wrap(result_ptr.release());
@@ -180,7 +164,7 @@ struct SortJoin {
 template<typename launch_arg_t = mgpu::empty_t,
   typename a_it, typename b_it, typename comp_t>
     mgpu::mem_t<int> operator()(a_it a, int a_count, b_it b, int b_count,
-                       comp_t comp, context_t& context) {
+                                 comp_t comp, context_t& context) {
         return mem_t<int>();
     }
 };
@@ -190,7 +174,7 @@ struct SortJoin<JoinType::INNER_JOIN> {
 template<typename launch_arg_t = mgpu::empty_t,
   typename a_it, typename b_it, typename comp_t>
     mgpu::mem_t<int> operator()(a_it a, int a_count, b_it b, int b_count,
-                       comp_t comp, context_t& context) {
+                                 comp_t comp, context_t& context) {
         return inner_join(a, a_count, b, b_count, comp, context);
     }
 };
