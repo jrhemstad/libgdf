@@ -141,14 +141,8 @@ DEF_OUTER_JOIN(f64, int64_t)
 
 // multi-column join function
 template <JoinType join_type>
-gdf_error multi_column_join(int num_cols, gdf_column **leftcol, gdf_column **rightcol, gdf_join_result_type **out_result)
+gdf_error hash_join(int num_cols, gdf_column **leftcol, gdf_column **rightcol, gdf_join_result_type **out_result)
 {
-  // check that the columns have matching types and the same number of rows
-  for (int i = 0; i < num_cols; i++) {
-    if (rightcol[i]->dtype != leftcol[i]->dtype) return GDF_JOIN_DTYPE_MISMATCH;
-    if (i > 0 && leftcol[i]->size != leftcol[i-1]->size) return GDF_COLUMN_SIZE_MISMATCH;
-    if (i > 0 && rightcol[i]->size != rightcol[i-1]->size) return GDF_COLUMN_SIZE_MISMATCH;
-  }
 
   // TODO: currently support up to 3 columns
   if (num_cols > 3) return GDF_JOIN_TOO_MANY_COLUMNS;
@@ -202,88 +196,123 @@ template<typename launch_arg_t = mgpu::empty_t,
 
 template <>
 struct SortJoin<JoinType::LEFT_JOIN> {
-template<typename launch_arg_t = mgpu::empty_t,
-  typename a_it, typename b_it, typename comp_t>
-    mgpu::mem_t<int> operator()(a_it a, int a_count, b_it b, int b_count,
-                       comp_t comp, context_t& context) {
+  template<typename launch_arg_t = mgpu::empty_t,
+    typename a_it, typename b_it, typename comp_t>
+      mgpu::mem_t<int> operator()(a_it a, int a_count, b_it b, int b_count,
+                                  comp_t comp, context_t& context) {
         return left_join(a, a_count, b, b_count, comp, context);
-    }
+      }
 };
 
 template <JoinType join_type, typename T>
-gdf_error single_column_join_typed(gdf_column *leftcol, gdf_column *rightcol,
-                             gdf_join_result_type **out_result, gdf_context *ctxt) {
-    using namespace mgpu;
-    gdf_error err = GDF_SUCCESS;
-    if ( leftcol->dtype != rightcol->dtype) return GDF_UNSUPPORTED_DTYPE;
-    if ( leftcol->size >= MAX_JOIN_SIZE ) return GDF_COLUMN_SIZE_TOO_BIG;
-    if ( rightcol->size >= MAX_JOIN_SIZE ) return GDF_COLUMN_SIZE_TOO_BIG;
-    std::unique_ptr<join_result<int> > result_ptr(new join_result<int>);
-    if (N_GDF_METHODS == ctxt->flag_method) {
-    err = GDF_UNSUPPORTED_METHOD;
-    } else if (GDF_SORT == ctxt->flag_method) {
-    SortJoin<join_type> join;
-    result_ptr->result = join((T*)leftcol->data, leftcol->size,
-                                (T*)rightcol->data, rightcol->size,
-                                less_t<T>(), result_ptr->context);
+gdf_error sort_join_typed(gdf_column *leftcol, gdf_column *rightcol,
+                          gdf_join_result_type **out_result, gdf_context *ctxt) 
+{
+  using namespace mgpu;
+  gdf_error err = GDF_SUCCESS;
+
+  if ( leftcol->dtype != rightcol->dtype) return GDF_UNSUPPORTED_DTYPE;
+  if ( leftcol->size >= MAX_JOIN_SIZE ) return GDF_COLUMN_SIZE_TOO_BIG;
+  if ( rightcol->size >= MAX_JOIN_SIZE ) return GDF_COLUMN_SIZE_TOO_BIG;
+
+  std::unique_ptr<join_result<int> > result_ptr(new join_result<int>);
+
+  if (GDF_SORT != ctxt->flag_method) 
+  {
+    err = GDF_INVALID_API_CALL;
+  } 
+  else 
+  {
+    SortJoin<join_type> sort_based_join;
+    result_ptr->result = sort_based_join(static_cast<T*>(leftcol->data), leftcol->size,
+                                         static_cast<T*>(rightcol->data), rightcol->size,
+                                         less_t<T>(), result_ptr->context);
     CUDA_CHECK_LAST();
     *out_result = cffi_wrap(result_ptr.release());
-    } else if (GDF_HASH == ctxt->flag_method) {
-    result_ptr->result = join_hash<join_type>((T*)leftcol->data, (int)leftcol->size,
-                                (T*)rightcol->data, (int)rightcol->size,
-				(int32_t*)NULL, (int32_t*)NULL,
-				(int32_t*)NULL, (int32_t*)NULL,
-                                less_t<T>(), result_ptr->context);
-    CUDA_CHECK_LAST();
-    *out_result = cffi_wrap(result_ptr.release());
-    }
-    return err;
+  } 
+
+  return err;
 }
 
 template <JoinType join_type>
-gdf_error single_column_join(gdf_column *leftcol, gdf_column *rightcol,
-                             gdf_join_result_type **out_result, gdf_context *ctxt) {
-    switch ( leftcol->dtype ){
-    case GDF_INT8:    return single_column_join_typed<join_type, int8_t>(leftcol, rightcol, out_result, ctxt);
-    case GDF_INT16:   return single_column_join_typed<join_type,int16_t>(leftcol, rightcol, out_result, ctxt);
-    case GDF_INT32:   return single_column_join_typed<join_type,int32_t>(leftcol, rightcol, out_result, ctxt);
-    case GDF_INT64:   return single_column_join_typed<join_type,int64_t>(leftcol, rightcol, out_result, ctxt);
-    case GDF_FLOAT32: return single_column_join_typed<join_type,int32_t>(leftcol, rightcol, out_result, ctxt);
-    case GDF_FLOAT64: return single_column_join_typed<join_type,int64_t>(leftcol, rightcol, out_result, ctxt);
+gdf_error sort_join(gdf_column *leftcol, gdf_column *rightcol,
+                    gdf_join_result_type **out_result, gdf_context *ctxt) 
+{
+
+  switch ( leftcol->dtype ){
+    case GDF_INT8:    return sort_join_typed<join_type, int8_t>(leftcol, rightcol, out_result, ctxt);
+    case GDF_INT16:   return sort_join_typed<join_type,int16_t>(leftcol, rightcol, out_result, ctxt);
+    case GDF_INT32:   return sort_join_typed<join_type,int32_t>(leftcol, rightcol, out_result, ctxt);
+    case GDF_INT64:   return sort_join_typed<join_type,int64_t>(leftcol, rightcol, out_result, ctxt);
+    case GDF_FLOAT32: return sort_join_typed<join_type,int32_t>(leftcol, rightcol, out_result, ctxt);
+    case GDF_FLOAT64: return sort_join_typed<join_type,int64_t>(leftcol, rightcol, out_result, ctxt);
     default: return GDF_UNSUPPORTED_DTYPE;
-    }
+  }
 }
 
 template
-gdf_error single_column_join<JoinType::INNER_JOIN>(gdf_column *leftcol, gdf_column *rightcol,
+gdf_error sort_join<JoinType::INNER_JOIN>(gdf_column *leftcol, gdf_column *rightcol,
                              gdf_join_result_type **out_result, gdf_context *ctxt);
 template
-gdf_error single_column_join<JoinType::LEFT_JOIN>(gdf_column *leftcol, gdf_column *rightcol,
+gdf_error sort_join<JoinType::LEFT_JOIN>(gdf_column *leftcol, gdf_column *rightcol,
                              gdf_join_result_type **out_result, gdf_context *ctxt);
 
 template <JoinType join_type>
-gdf_error join_call(
-        int num_cols, gdf_column **leftcol, gdf_column **rightcol,
-                                 gdf_join_result_type **out_result, gdf_context *ctxt) {
-    if (num_cols > 1) {
-        if (GDF_HASH != ctxt->flag_method) {
-            return GDF_UNSUPPORTED_DTYPE;
-        } else {
-            return multi_column_join<join_type>(num_cols, leftcol, rightcol, out_result);
+gdf_error join_call( int num_cols, gdf_column **leftcol, gdf_column **rightcol,
+                     gdf_join_result_type **out_result, gdf_context *join_context) 
+{
+
+  if( (0 == num_cols) || (nullptr == leftcol) || (nullptr == rightcol))
+    return GDF_DATASET_EMPTY;
+
+  if(nullptr == join_context)
+    return GDF_INVALID_API_CALL;
+
+  // check that the columns data are not null, have matching types, 
+  // and the same number of rows
+  const auto left_col_size = leftcol[0]->size;
+  const auto right_col_size = rightcol[0]->size;
+  for (int i = 0; i < num_cols; i++) {
+    if(nullptr == rightcol[i]->data) return GDF_DATASET_EMPTY;
+    if(nullptr == leftcol[i]->data) return GDF_DATASET_EMPTY;
+    if(rightcol[i]->dtype != leftcol[i]->dtype) return GDF_JOIN_DTYPE_MISMATCH;
+    if(left_col_size != leftcol[i]->size) return GDF_COLUMN_SIZE_MISMATCH;
+    if(right_col_size != rightcol[i]->size) return GDF_COLUMN_SIZE_MISMATCH;
+  }
+
+  gdf_method join_method = join_context->flag_method; 
+
+  switch(join_method)
+  {
+    case GDF_HASH:
+      {
+        return hash_join<join_type>(num_cols, leftcol, rightcol, out_result);
+      }
+    case GDF_SORT:
+      {
+        if(1 == num_cols)
+        {
+          return sort_join<join_type>(leftcol[0], rightcol[0], out_result, join_context);
         }
-    } else if (num_cols == 1) {
-        return single_column_join<join_type>(leftcol[0], rightcol[0], out_result, ctxt);
-    } else {
-        return GDF_UNSUPPORTED_METHOD;
-    }
+        else
+        {
+          return GDF_JOIN_TOO_MANY_COLUMNS;
+        }
+      }
+    default:
+      return GDF_UNSUPPORTED_METHOD;
+  }
+
 }
 
 gdf_error gdf_left_join(int num_cols, gdf_column **leftcol, gdf_column **rightcol,
-                                gdf_join_result_type **out_result, gdf_context *ctxt) {
-    return join_call<JoinType::LEFT_JOIN>(num_cols, leftcol, rightcol, out_result, ctxt);
+                        gdf_join_result_type **out_result, gdf_context *ctxt) 
+{
+  return join_call<JoinType::LEFT_JOIN>(num_cols, leftcol, rightcol, out_result, ctxt);
 }
 
 gdf_error gdf_inner_join(int num_cols, gdf_column **leftcol, gdf_column **rightcol,
-                                gdf_join_result_type **out_result, gdf_context *ctxt) {
-    return join_call<JoinType::INNER_JOIN>(num_cols, leftcol, rightcol, out_result, ctxt);
+                         gdf_join_result_type **out_result, gdf_context *ctxt) 
+{
+  return join_call<JoinType::INNER_JOIN>(num_cols, leftcol, rightcol, out_result, ctxt);
 }
