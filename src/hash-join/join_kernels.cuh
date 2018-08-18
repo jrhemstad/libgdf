@@ -27,10 +27,9 @@ enum class JoinType {
 constexpr int warp_size = 32;
 
 template<typename multimap_type>
-__global__ void build_hash_tbl(
-    multimap_type * const multi_map,
-    const typename multimap_type::key_type* const build_tbl,
-    const typename multimap_type::size_type build_tbl_size)
+__global__ void build_hash_tbl( multimap_type * const multi_map,
+                                const typename multimap_type::key_type* const build_tbl,
+                                const typename multimap_type::size_type build_tbl_size)
 {
     const typename multimap_type::mapped_type i = threadIdx.x + blockIdx.x * blockDim.x;
     if ( i < build_tbl_size ) {

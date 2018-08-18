@@ -30,8 +30,7 @@ mgpu::mem_t<output_type> join_hash(gdf_table const & left_table,
 {
   mgpu::mem_t<output_type> joined_output;
 
-
-  const gdf_dtype key_type = left_table.get_probe_gdf_dtype();
+  const gdf_dtype key_type = left_table.get_build_column_type();
 
   switch(key_type)
   {
@@ -55,7 +54,7 @@ mgpu::mem_t<output_type> join_hash(gdf_table const & left_table,
         compute_hash_join<join_type, int64_t, output_type>(context, joined_output, left_table, right_table);                    
         break;
       }
-    // For floating point types probe column, treat as an integral type
+    // For floating point types build column, treat as an integral type
     case GDF_FLOAT32: 
       {
         compute_hash_join<join_type, int32_t, output_type>(context, joined_output, left_table, right_table);
@@ -67,7 +66,7 @@ mgpu::mem_t<output_type> join_hash(gdf_table const & left_table,
         break;
       }
     default:
-      assert(false && "Invalid probe column datatype.");
+      assert(false && "Invalid build column datatype.");
   }
 
   return joined_output;

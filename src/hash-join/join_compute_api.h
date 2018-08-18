@@ -99,9 +99,9 @@ cudaError_t compute_hash_join(mgpu::context_t & compute_ctx,
 #endif
 
   gdf_table const & build_table = right_table;
-  const size_t build_table_size = build_table.get_column_length();
+  const size_t build_column_length = build_table.get_column_length();
 
-  const size_t hash_tbl_size = static_cast<size_t>(static_cast<size_t>(build_table_size) * 100 / DEFAULT_HASH_TBL_OCCUPANCY);
+  const size_t hash_tbl_size = static_cast<size_t>(static_cast<size_t>(build_column_length) * 100 / DEFAULT_HASH_TBL_OCCUPANCY);
   std::unique_ptr<multimap_type> hash_tbl(new multimap_type(hash_tbl_size));
   hash_tbl->prefetch(0);  // FIXME: use GPU device id from the context? but moderngpu only provides cudaDeviceProp (although should be possible once we move to Arrow)
 // TODO build the hash table on the smaller table
@@ -109,8 +109,9 @@ cudaError_t compute_hash_join(mgpu::context_t & compute_ctx,
   CUDA_RT_CALL( cudaDeviceSynchronize() );
 
   // step 2: build the HT
-  constexpr int block_size = DEFAULT_CUDA_BLOCK_SIZE;
-  //build_hash_tbl<<<(build_table_size + block_size - 1) / block_size, block_size>>>(hash_tbl.get(), b, b_count);
+  //key_type * build_column = static_cast<key_type*>(build_table.get_build_column_data());
+  //constexpr int block_size = DEFAULT_CUDA_BLOCK_SIZE;
+  //build_hash_tbl<<<(build_table_size + block_size - 1) / block_size, block_size>>>(hash_tbl.get(), build_column, build_column_length);
   
   CUDA_RT_CALL( cudaGetLastError() );
 

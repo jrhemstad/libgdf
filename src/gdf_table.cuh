@@ -41,14 +41,14 @@ public:
     return column_length;
   }
 
-  gdf_dtype get_probe_gdf_dtype() const
+  gdf_dtype get_build_column_type() const
   {
-    return host_columns[probe_column_index]->dtype;
+    return host_columns[build_column_index]->dtype;
   }
 
-  void * get_probe_column_data() const
+  void * get_build_column_data() const
   {
-    return host_columns[probe_column_index]->data;
+    return host_columns[build_column_index]->data;
   }
 
     /* --------------------------------------------------------------------------*/
@@ -225,8 +225,8 @@ private:
   const size_t num_columns;
   size_t column_length;
 
-  // Just use the first column as the probe column for now
-  const size_t probe_column_index{0};
+  // Just use the first column as the build column for now
+  const size_t build_column_index{0};
 
 };
 
