@@ -147,12 +147,12 @@ template <JoinType join_type>
 gdf_error hash_join(int num_cols, gdf_column **leftcol, gdf_column **rightcol, gdf_join_result_type **out_result)
 {
 
-  gdf_table left_table(num_cols, leftcol);
-  gdf_table right_table(num_cols, rightcol);
+  std::unique_ptr<gdf_table> left_table(new gdf_table(num_cols, leftcol));
+  std::unique_ptr<gdf_table> right_table(new gdf_table(num_cols, rightcol));
 
   std::unique_ptr<join_result<output_type> > result_ptr(new join_result<output_type>);
 
-  result_ptr->result = join_hash<join_type, output_type>(left_table, right_table, result_ptr->context);
+  result_ptr->result = join_hash<join_type, output_type>(*left_table, *right_table, result_ptr->context);
 
   CUDA_CHECK_LAST();
   *out_result = cffi_wrap(result_ptr.release());
