@@ -37,6 +37,7 @@ public:
 
   ~gdf_table(){}
 
+  __host__ __device__
   size_t get_column_length() const
   {
     return column_length;
@@ -66,7 +67,7 @@ public:
   __device__
   bool rows_equal(gdf_table const & other, 
                   const size_t my_row_index, 
-                  const size_t other_row_index)
+                  const size_t other_row_index) const
   {
 
     bool is_equal{true};
