@@ -5,9 +5,10 @@
 #include <thrust/device_vector.h>
 #include <cassert>
 #include "hash-join/hash_functions.cuh"
+#include "hash-join/managed.cuh"
 
 // TODO Inherit from managed class to allocate with managed memory?
-class gdf_table 
+class gdf_table : public managed
 {
 
 public:
@@ -141,7 +142,7 @@ public:
   template <template <typename> class hash_function = default_hash,
             typename T>
   __device__ 
-  typename hash_function<T>::result_type hash_row(size_t row_index)
+  typename hash_function<T>::result_type hash_row(size_t row_index) const
   {
     using hash_value_t = typename hash_function<T>::result_type;
     hash_value_t hash_value{0};
