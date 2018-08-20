@@ -8,12 +8,14 @@
 #include "hash-join/managed.cuh"
 
 // TODO Inherit from managed class to allocate with managed memory?
+template <typename T>
 class gdf_table : public managed
 {
-
 public:
 
-  gdf_table(size_t num_cols, gdf_column ** gdf_columns) 
+  using size_type = T;
+
+  gdf_table(size_type num_cols, gdf_column ** gdf_columns) 
     : num_columns(num_cols), host_columns(gdf_columns)
   {
 
@@ -23,7 +25,7 @@ public:
     // as contiguous arrays
     device_columns.reserve(num_cols);
     device_types.reserve(num_cols);
-    for(size_t i = 0; i < num_cols; ++i)
+    for(size_type i = 0; i < num_cols; ++i)
     {
       assert(column_length == host_columns[i]->size);
 
@@ -38,7 +40,7 @@ public:
   ~gdf_table(){}
 
   __host__ __device__
-  size_t get_column_length() const
+  size_type get_column_length() const
   {
     return column_length;
   }
@@ -49,6 +51,11 @@ public:
   }
 
   void * get_build_column_data() const
+  {
+    return host_columns[build_column_index]->data;
+  }
+
+  void * get_probe_column_data() const
   {
     return host_columns[build_column_index]->data;
   }
@@ -66,13 +73,13 @@ public:
     /* ----------------------------------------------------------------------------*/
   __device__
   bool rows_equal(gdf_table const & other, 
-                  const size_t my_row_index, 
-                  const size_t other_row_index) const
+                  const size_type my_row_index, 
+                  const size_type other_row_index) const
   {
 
     bool is_equal{true};
 
-    for(size_t i = 0; i < num_columns; ++i)
+    for(size_type i = 0; i < num_columns; ++i)
     {
       const gdf_dtype my_col_type = d_columns_types[i];
       const gdf_dtype other_col_type = other.d_columns_types[i];
@@ -146,8 +153,8 @@ public:
   template <template <typename> class hash_function = default_hash,
             typename dummy = int>
   __device__ 
-  typename hash_function<dummy>::result_type hash_row(size_t row_index, 
-                                                      size_t num_columns_to_hash = 0) const
+  typename hash_function<dummy>::result_type hash_row(size_type row_index, 
+                                                      size_type num_columns_to_hash = 0) const
   {
     using hash_value_t = typename hash_function<dummy>::result_type;
     hash_value_t hash_value{0};
@@ -156,7 +163,7 @@ public:
     if(0 == num_columns_to_hash)
       num_columns_to_hash = this->num_columns;
 
-    for(size_t i = 0; i < num_columns_to_hash; ++i)
+    for(size_type i = 0; i < num_columns_to_hash; ++i)
     {
       const gdf_dtype current_column_type = d_columns_types[i];
 
@@ -234,11 +241,12 @@ private:
   thrust::device_vector<gdf_dtype> device_types;
 
   gdf_column ** host_columns;
-  const size_t num_columns;
-  size_t column_length;
+  const size_type num_columns;
+  size_type column_length;
 
-  // Just use the first column as the build column for now
-  const size_t build_column_index{0};
+  // Just use the first column as the build/probe column for now
+  const size_type build_column_index{0};
+  const size_type probe_column_index{0};
 
 };
 
