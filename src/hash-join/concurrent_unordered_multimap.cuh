@@ -291,6 +291,7 @@ __host__ __device__ bool operator!=(const cycle_iterator_adapter<T>& lhs, const 
  */
 template <typename Key,
           typename Element,
+          typename size_type,
           Key unused_key,
           Element unused_element,
           typename Hasher = default_hash<Key>,
@@ -301,7 +302,6 @@ class concurrent_unordered_multimap : public managed
 {
 
 public:
-    typedef size_t                                          size_type;
     typedef Hasher                                          hasher;
     typedef Equality                                        key_equal;
     typedef Allocator                                       allocator_type;
