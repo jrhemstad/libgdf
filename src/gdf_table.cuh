@@ -134,6 +134,7 @@ public:
    * @Synopsis  This device function computes a hash value for a given row in the table
    * 
    * @Param row_index The row of the table to compute the hash value for
+   * @Param num_columns_to_hash The number of columns in the row to hash. If 0, hashes all columns
    * @tparam hash_function The hash function that is used for each element in the row
    * @tparam dummy Used only to be able to resolve the result_type from the hash_function.
                    The actual type of dummy doesn't matter.
@@ -144,12 +145,17 @@ public:
   template <template <typename> class hash_function = default_hash,
             typename dummy = int>
   __device__ 
-  typename hash_function<dummy>::result_type hash_row(size_t row_index) const
+  typename hash_function<dummy>::result_type hash_row(size_t row_index, 
+                                                      size_t num_columns_to_hash = 0) const
   {
     using hash_value_t = typename hash_function<dummy>::result_type;
     hash_value_t hash_value{0};
 
-    for(size_t i = 0; i < num_columns; ++i)
+    // If num_columns_to_hash is zero, hash all columns
+    if(0 == num_columns_to_hash)
+      num_columns_to_hash = this->num_columns;
+
+    for(size_t i = 0; i < num_columns_to_hash; ++i)
     {
       const gdf_dtype current_column_type = d_columns_types[i];
 
