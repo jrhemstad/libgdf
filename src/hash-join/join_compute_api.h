@@ -30,7 +30,7 @@
 
 #include <moderngpu/kernel_scan.hxx>
 
-constexpr int DEFAULT_HASH_TBL_OCCUPANCY = 50;
+constexpr int DEFAULT_HASH_TABLE_OCCUPANCY = 50;
 constexpr int DEFAULT_CUDA_BLOCK_SIZE = 128;
 constexpr int DEFAULT_CUDA_CACHE_SIZE = 128;
 
@@ -66,89 +66,118 @@ void pairs_to_decoupled(mgpu::mem_t<size_type> &output, const size_type output_n
 /// \brief Performs a generic hash based join of columns a and b. Works for both inner and left joins.
 ///
 /// \param[in] compute_ctx The CudaComputeContext to shedule this to.
-template<JoinType join_type, typename key_type, typename output_type>
+template<JoinType join_type, 
+         typename gdf_table_type,
+         typename key_type, 
+         typename index_type>
 cudaError_t compute_hash_join(mgpu::context_t & compute_ctx, 
-                              mgpu::mem_t<output_type> & joined_output, 
-                              gdf_table const & left_table,
-                              gdf_table const & right_table,
+                              mgpu::mem_t<index_type> & joined_output, 
+                              gdf_table_type const & left_table,
+                              gdf_table_type const & right_table,
                               bool flip_results = false)
 {
 
   cudaError_t error(cudaSuccess);
 
-  using joined_type = join_pair<output_type>;
+  using joined_type = join_pair<index_type>;
+  using size_type = typename gdf_table_type::size_type;
 
   // allocate a counter and reset
-  output_type *d_joined_idx;
-  CUDA_RT_CALL( cudaMalloc(&d_joined_idx, sizeof(output_type)) );
-  CUDA_RT_CALL( cudaMemsetAsync(d_joined_idx, 0, sizeof(output_type), 0) );
+  size_type *d_joined_idx;
+  CUDA_RT_CALL( cudaMalloc(&d_joined_idx, sizeof(size_type)) );
+  CUDA_RT_CALL( cudaMemsetAsync(d_joined_idx, 0, sizeof(size_type), 0) );
   
 #ifdef HT_LEGACY_ALLOCATOR
   using multimap_type = concurrent_unordered_multimap<key_type, 
-                                                      output_type, 
+                                                      index_type, 
+                                                      size_type,
                                                       std::numeric_limits<key_type>::max(), 
-                                                      std::numeric_limits<output_type>::max(), 
+                                                      std::numeric_limits<index_type>::max(), 
                                                       default_hash<key_type>,
                                                       equal_to<key_type>,
-                                                      legacy_allocator< thrust::pair<key_type, output_type> > >;
+                                                      legacy_allocator< thrust::pair<key_type, index_type> > >;
 #else
   using multimap_type = concurrent_unordered_multimap<key_type, 
-                                                      output_type, 
+                                                      index_type, 
+                                                      size_type,
                                                       std::numeric_limits<key_type>::max(), 
                                                       std::numeric_limits<size_type>::max()>;
 #endif
 
-  gdf_table const & build_table = right_table;
-  const size_t build_column_length = build_table.get_column_length();
+  // TODO Make the build table the smaller table
+  gdf_table_type const & build_table{right_table};
+  const size_type build_column_length{build_table.get_column_length()};
+  const key_type * const build_column{static_cast<key_type*>(build_table.get_build_column_data())};
 
-  const size_t hash_tbl_size = static_cast<size_t>(static_cast<size_t>(build_column_length) * 100 / DEFAULT_HASH_TBL_OCCUPANCY);
-  std::unique_ptr<multimap_type> hash_tbl(new multimap_type(hash_tbl_size));
-  hash_tbl->prefetch(0);  // FIXME: use GPU device id from the context? but moderngpu only provides cudaDeviceProp (although should be possible once we move to Arrow)
-// TODO build the hash table on the smaller table
+  const size_type hash_table_size = (static_cast<size_type>(build_column_length) * 100 / DEFAULT_HASH_TABLE_OCCUPANCY);
+  std::unique_ptr<multimap_type> hash_table(new multimap_type(hash_table_size));
+  
+  // FIXME: use GPU device id from the context? 
+  // but moderngpu only provides cudaDeviceProp 
+  // (although should be possible once we move to Arrow)
+  hash_table->prefetch(0); 
   
   CUDA_RT_CALL( cudaDeviceSynchronize() );
 
-  // step 2: build the HT
-  //key_type * build_column = static_cast<key_type*>(build_table.get_build_column_data());
-  //constexpr int block_size = DEFAULT_CUDA_BLOCK_SIZE;
-  //build_hash_tbl<<<(build_table_size + block_size - 1) / block_size, block_size>>>(hash_tbl.get(), build_column, build_column_length);
+  // step 2: build the HT 
+  constexpr int block_size = DEFAULT_CUDA_BLOCK_SIZE;
+  const size_type build_grid_size{(build_column_length + block_size - 1)/block_size};
+  build_hash_table<<<build_grid_size, block_size>>>(hash_table.get(), 
+                                                    build_column, 
+                                                    build_column_length);
   
   CUDA_RT_CALL( cudaGetLastError() );
 
+  // step 3ab: scan table A (left), probe the HT without outputting the joined indices. 
+  // Only get number of outputted elements.
+  size_type * join_output_size;
+  cudaMalloc(&join_output_size, sizeof(size_type));
+  cudaMemset(join_output_size, 0, sizeof(size_type));
+
+  gdf_table_type const & probe_table{right_table};
+  const size_type probe_column_length{probe_table.get_column_length()};
+  const key_type * const probe_column{static_cast<key_type*>(probe_table.get_probe_column_data())};
+  const size_type probe_grid_size{(probe_column_length + block_size -1)/block_size};
+
+  compute_join_output_size<join_type, 
+                           multimap_type, 
+                           gdf_table_type,
+                           key_type, 
+                           size_type, 
+                           block_size, 
+                           DEFAULT_CUDA_CACHE_SIZE>
+	<<<probe_grid_size, block_size>>>(hash_table.get(), 
+                                    build_table, 
+                                    probe_table, 
+                                    probe_column,
+                                    probe_table.get_column_length(),
+                                    join_output_size);
+
+  CUDA_RT_CALL( cudaGetLastError() );
+
+  size_type h_join_output_size{0};
+  CUDA_RT_CALL( cudaMemcpy(&h_join_output_size, join_output_size, sizeof(size_type), cudaMemcpyDeviceToHost));
+
   /*
-
-  // step 3ab: scan table A (left), probe the HT without outputting the joined indices. Only get number of outputted elements.
-  size_type* d_actualFound;
-  cudaMalloc(&d_actualFound, sizeof(size_type));
-  cudaMemset(d_actualFound, 0, sizeof(size_type));
-  probe_hash_tbl_count_common<join_type, multimap_type, key_type, key_type2, key_type3, size_type, block_size, DEFAULT_CUDA_CACHE_SIZE>
-	<<<(a_count + block_size-1) / block_size, block_size>>>
-	(hash_tbl.get(), a, a_count, a2, b2, a3, b3,d_actualFound);
-  if (error != cudaSuccess)
-	return error;
-
-  size_type scanSize=0;
-  CUDA_RT_CALL( cudaMemcpy(&scanSize, d_actualFound, sizeof(size_type), cudaMemcpyDeviceToHost));
-
   int dev_ordinal;
   joined_type* tempOut=NULL;
   CUDA_RT_CALL( cudaGetDevice(&dev_ordinal));
-  joined_output = mgpu::mem_t<size_type> (2 * (scanSize), compute_ctx);
+  joined_output = mgpu::mem_t<size_type> (2 * (h_join_output_size), compute_ctx);
 
   // Checking if any common elements exists. If not, then there is no point scanning again.
-  if(scanSize==0){
+  if(h_join_output_size==0){
 	return error;
   }
 
-  CUDA_RT_CALL( cudaMallocManaged   ( &tempOut, sizeof(joined_type)*scanSize));
-  CUDA_RT_CALL( cudaMemPrefetchAsync( tempOut , sizeof(joined_type)*scanSize, dev_ordinal));
+  CUDA_RT_CALL( cudaMallocManaged   ( &tempOut, sizeof(joined_type)*h_join_output_size));
+  CUDA_RT_CALL( cudaMemPrefetchAsync( tempOut , sizeof(joined_type)*h_join_output_size, dev_ordinal));
 
   CUDA_RT_CALL( cudaMemset(d_joined_idx, 0, sizeof(size_type)) );
   // step 3b: scan table A (left), probe the HT and output the joined indices - doing left join here
-  probe_hash_tbl<join_type, multimap_type, key_type, key_type2, key_type3, size_type, joined_type, block_size, DEFAULT_CUDA_CACHE_SIZE>
+  probe_hash_table<join_type, multimap_type, key_type, key_type2, key_type3, size_type, joined_type, block_size, DEFAULT_CUDA_CACHE_SIZE>
 	<<<(a_count + block_size-1) / block_size, block_size>>>
-	(hash_tbl.get(), a, a_count, a2, b2, a3, b3,
-	 static_cast<joined_type*>(tempOut), d_joined_idx, scanSize);
+	(hash_table.get(), a, a_count, a2, b2, a3, b3,
+	 static_cast<joined_type*>(tempOut), d_joined_idx, h_join_output_size);
   error = cudaDeviceSynchronize();
 
   // free memory used for the counters
@@ -156,7 +185,7 @@ cudaError_t compute_hash_join(mgpu::context_t & compute_ctx,
   CUDA_RT_CALL( cudaFree(d_actualFound) ); 
 
 
-  pairs_to_decoupled(joined_output, scanSize, tempOut, compute_ctx, flip_results);
+  pairs_to_decoupled(joined_output, h_join_output_size, tempOut, compute_ctx, flip_results);
 
   CUDA_RT_CALL( cudaFree(tempOut) );
   */
