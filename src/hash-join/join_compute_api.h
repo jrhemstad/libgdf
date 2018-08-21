@@ -170,18 +170,29 @@ cudaError_t compute_hash_join(mgpu::context_t & compute_ctx,
   CUDA_RT_CALL( cudaMalloc(&d_global_write_index, sizeof(size_type)) );
   CUDA_RT_CALL( cudaMemsetAsync(d_global_write_index, 0, sizeof(size_type), 0) );
 
-  /*
   // step 3b: scan table A (left), probe the HT and output the joined indices - doing left join here
-  probe_hash_table<join_type, multimap_type, key_type, key_type2, key_type3, size_type, join_output_pair, block_size, DEFAULT_CUDA_CACHE_SIZE>
-	<<<(a_count + block_size-1) / block_size, block_size>>>
-	(hash_table.get(), a, a_count, a2, b2, a3, b3,
-	 static_cast<join_output_pair*>(tempOut), d_global_write_index, h_join_output_size);
+  probe_hash_table<join_type, 
+                   multimap_type, 
+                   key_type, 
+                   size_type, 
+                   join_output_pair, 
+                   block_size, 
+                   DEFAULT_CUDA_CACHE_SIZE>
+	<<<probe_grid_size, block_size>>> (hash_table.get(), 
+                                     build_table, 
+                                     probe_table, 
+                                     probe_column, 
+                                     probe_table.get_column_length(), 
+                                     static_cast<join_output_pair*>(tempOut), 
+                                     d_global_write_index, 
+                                     h_join_output_size);
+
+  /*
   error = cudaDeviceSynchronize();
 
   // free memory used for the counters
   CUDA_RT_CALL( cudaFree(d_global_write_index) );
   CUDA_RT_CALL( cudaFree(d_actualFound) ); 
-
 
   pairs_to_decoupled(joined_output, h_join_output_size, tempOut, compute_ctx, flip_results);
 

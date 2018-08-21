@@ -148,23 +148,21 @@ __global__ void compute_join_output_size( multimap_type const * const multi_map,
 template< JoinType join_type,
           typename multimap_type,
           typename key_type,
-          typename key2_type,
-          typename key3_type,
           typename size_type,
           typename join_output_pair,
           int block_size,
           int output_cache_size>
-__global__ void probe_hash_table( multimap_type * multi_map,
-                                  const key_type* probe_table,
+__global__ void probe_hash_table( multimap_type const * const multi_map,
+                                  gdf_table<size_type> const & build_table,
+                                  gdf_table<size_type> const & probe_table,
+                                  key_type const * const probe_column,
                                   const size_type probe_table_size,
-                                  const key2_type* probe_col2, const key2_type* build_col2,
-                                  const key3_type* probe_col3, const key3_type* build_col3,
                                   join_output_pair * const joined,
-                                  size_type* const current_idx,
+                                  size_type* current_idx,
                                   const size_type max_size,
-                                  const size_type offset = 0,
-                                  const bool optimized = false)
+                                  const size_type offset = 0)
 {
+  /*
   typedef typename multimap_type::key_equal key_compare_type;
   __shared__ int current_idx_shared[block_size/warp_size];
   __shared__ join_output_pair joined_shared[block_size/warp_size][output_cache_size];
@@ -276,8 +274,10 @@ __global__ void probe_hash_table( multimap_type * multi_map,
       }
     }
   }
+*/
 }
 
+/*
 template<
     typename multimap_type,
     typename key_type,
@@ -330,3 +330,4 @@ __global__ void probe_hash_table_uniq_keys(
     }
 }
 
+*/
