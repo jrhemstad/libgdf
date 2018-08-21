@@ -37,8 +37,8 @@ constexpr int DEFAULT_CUDA_CACHE_SIZE = 128;
 template<typename size_type>
 struct join_pair 
 { 
-  size_type first{0}; 
-  size_type second{0}; 
+  size_type first; 
+  size_type second; 
 };
 
 /// \brief Transforms the data from an array of structurs to two column.
