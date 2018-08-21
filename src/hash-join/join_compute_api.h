@@ -49,8 +49,8 @@ struct join_pair
 ///
 /// \param[in] compute_ctx The CudaComputeContext to shedule this to.
 /// \param[in] Flag signifying if the order of the indices for A and B need to be swapped. This flag is used when the order of A and B are swapped to build the hash table for the smalle column.
-template<typename size_type, typename joined_type>
-void pairs_to_decoupled(mgpu::mem_t<size_type> &output, const size_type output_npairs, joined_type *joined, mgpu::context_t &context, bool flip_indices)
+template<typename size_type, typename join_output_pair>
+void pairs_to_decoupled(mgpu::mem_t<size_type> &output, const size_type output_npairs, join_output_pair *joined, mgpu::context_t &context, bool flip_indices)
 {
   if (output_npairs > 0) {
     size_type* output_data = output.data();
@@ -79,7 +79,7 @@ cudaError_t compute_hash_join(mgpu::context_t & compute_ctx,
 
   cudaError_t error(cudaSuccess);
 
-  using joined_type = join_pair<index_type>;
+  using join_output_pair = join_pair<index_type>;
   using size_type = typename gdf_table_type::size_type;
 
   // allocate a counter and reset
@@ -160,7 +160,7 @@ cudaError_t compute_hash_join(mgpu::context_t & compute_ctx,
 
   /*
   int dev_ordinal;
-  joined_type* tempOut=NULL;
+  join_output_pair* tempOut=NULL;
   CUDA_RT_CALL( cudaGetDevice(&dev_ordinal));
   joined_output = mgpu::mem_t<size_type> (2 * (h_join_output_size), compute_ctx);
 
@@ -169,15 +169,15 @@ cudaError_t compute_hash_join(mgpu::context_t & compute_ctx,
 	return error;
   }
 
-  CUDA_RT_CALL( cudaMallocManaged   ( &tempOut, sizeof(joined_type)*h_join_output_size));
-  CUDA_RT_CALL( cudaMemPrefetchAsync( tempOut , sizeof(joined_type)*h_join_output_size, dev_ordinal));
+  CUDA_RT_CALL( cudaMallocManaged   ( &tempOut, sizeof(join_output_pair)*h_join_output_size));
+  CUDA_RT_CALL( cudaMemPrefetchAsync( tempOut , sizeof(join_output_pair)*h_join_output_size, dev_ordinal));
 
   CUDA_RT_CALL( cudaMemset(d_joined_idx, 0, sizeof(size_type)) );
   // step 3b: scan table A (left), probe the HT and output the joined indices - doing left join here
-  probe_hash_table<join_type, multimap_type, key_type, key_type2, key_type3, size_type, joined_type, block_size, DEFAULT_CUDA_CACHE_SIZE>
+  probe_hash_table<join_type, multimap_type, key_type, key_type2, key_type3, size_type, join_output_pair, block_size, DEFAULT_CUDA_CACHE_SIZE>
 	<<<(a_count + block_size-1) / block_size, block_size>>>
 	(hash_table.get(), a, a_count, a2, b2, a3, b3,
-	 static_cast<joined_type*>(tempOut), d_joined_idx, h_join_output_size);
+	 static_cast<join_output_pair*>(tempOut), d_joined_idx, h_join_output_size);
   error = cudaDeviceSynchronize();
 
   // free memory used for the counters
