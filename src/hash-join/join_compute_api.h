@@ -82,10 +82,6 @@ cudaError_t compute_hash_join(mgpu::context_t & compute_ctx,
   using join_output_pair = join_pair<index_type>;
   using size_type = typename gdf_table_type::size_type;
 
-  // allocate a counter and reset
-  size_type *d_joined_idx;
-  CUDA_RT_CALL( cudaMalloc(&d_joined_idx, sizeof(size_type)) );
-  CUDA_RT_CALL( cudaMemsetAsync(d_joined_idx, 0, sizeof(size_type), 0) );
   
 #ifdef HT_LEGACY_ALLOCATOR
   using multimap_type = concurrent_unordered_multimap<key_type, 
@@ -157,31 +153,36 @@ cudaError_t compute_hash_join(mgpu::context_t & compute_ctx,
 
   size_type h_join_output_size{0};
   CUDA_RT_CALL( cudaMemcpy(&h_join_output_size, join_output_size, sizeof(size_type), cudaMemcpyDeviceToHost));
+  
+  // If the output size is zero, return immediately
+  if(0 == h_join_output_size){
+    return error;
+  }
 
-  /*
-  int dev_ordinal;
-  join_output_pair* tempOut=NULL;
+  int dev_ordinal{0};
+  join_output_pair* tempOut{nullptr};
   CUDA_RT_CALL( cudaGetDevice(&dev_ordinal));
   joined_output = mgpu::mem_t<size_type> (2 * (h_join_output_size), compute_ctx);
 
-  // Checking if any common elements exists. If not, then there is no point scanning again.
-  if(h_join_output_size==0){
-	return error;
-  }
-
+  // Allocate device buffer for join output
   CUDA_RT_CALL( cudaMallocManaged   ( &tempOut, sizeof(join_output_pair)*h_join_output_size));
   CUDA_RT_CALL( cudaMemPrefetchAsync( tempOut , sizeof(join_output_pair)*h_join_output_size, dev_ordinal));
 
-  CUDA_RT_CALL( cudaMemset(d_joined_idx, 0, sizeof(size_type)) );
+  // Allocate device global counter used by threads to determine output write location
+  size_type *d_global_write_index{nullptr};
+  CUDA_RT_CALL( cudaMalloc(&d_global_write_index, sizeof(size_type)) );
+  CUDA_RT_CALL( cudaMemsetAsync(d_global_write_index, 0, sizeof(size_type), 0) );
+
+  /*
   // step 3b: scan table A (left), probe the HT and output the joined indices - doing left join here
   probe_hash_table<join_type, multimap_type, key_type, key_type2, key_type3, size_type, join_output_pair, block_size, DEFAULT_CUDA_CACHE_SIZE>
 	<<<(a_count + block_size-1) / block_size, block_size>>>
 	(hash_table.get(), a, a_count, a2, b2, a3, b3,
-	 static_cast<join_output_pair*>(tempOut), d_joined_idx, h_join_output_size);
+	 static_cast<join_output_pair*>(tempOut), d_global_write_index, h_join_output_size);
   error = cudaDeviceSynchronize();
 
   // free memory used for the counters
-  CUDA_RT_CALL( cudaFree(d_joined_idx) );
+  CUDA_RT_CALL( cudaFree(d_global_write_index) );
   CUDA_RT_CALL( cudaFree(d_actualFound) ); 
 
 
