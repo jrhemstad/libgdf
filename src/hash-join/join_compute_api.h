@@ -67,21 +67,19 @@ void pairs_to_decoupled(mgpu::mem_t<size_type> &output, const size_type output_n
 ///
 /// \param[in] compute_ctx The CudaComputeContext to shedule this to.
 template<JoinType join_type, 
-         typename gdf_table_type,
          typename key_type, 
-         typename index_type>
+         typename index_type,
+         typename size_type>
 cudaError_t compute_hash_join(mgpu::context_t & compute_ctx, 
                               mgpu::mem_t<index_type> & joined_output, 
-                              gdf_table_type const & left_table,
-                              gdf_table_type const & right_table,
+                              gdf_table<size_type> const & left_table,
+                              gdf_table<size_type> const & right_table,
                               bool flip_results = false)
 {
 
   cudaError_t error(cudaSuccess);
 
   using join_output_pair = join_pair<index_type>;
-  using size_type = typename gdf_table_type::size_type;
-
   
 #ifdef HT_LEGACY_ALLOCATOR
   using multimap_type = concurrent_unordered_multimap<key_type, 
@@ -101,7 +99,7 @@ cudaError_t compute_hash_join(mgpu::context_t & compute_ctx,
 #endif
 
   // TODO Make the build table the smaller table
-  gdf_table_type const & build_table{right_table};
+  gdf_table<size_type> const & build_table{right_table};
   const size_type build_column_length{build_table.get_column_length()};
   const key_type * const build_column{static_cast<key_type*>(build_table.get_build_column_data())};
 
@@ -130,16 +128,15 @@ cudaError_t compute_hash_join(mgpu::context_t & compute_ctx,
   cudaMalloc(&join_output_size, sizeof(size_type));
   cudaMemset(join_output_size, 0, sizeof(size_type));
 
-  gdf_table_type const & probe_table{right_table};
+  gdf_table<size_type> const & probe_table{right_table};
   const size_type probe_column_length{probe_table.get_column_length()};
   const key_type * const probe_column{static_cast<key_type*>(probe_table.get_probe_column_data())};
   const size_type probe_grid_size{(probe_column_length + block_size -1)/block_size};
 
   compute_join_output_size<join_type, 
                            multimap_type, 
-                           gdf_table_type,
                            key_type, 
-                           size_type, 
+                           size_type,
                            block_size, 
                            DEFAULT_CUDA_CACHE_SIZE>
 	<<<probe_grid_size, block_size>>>(hash_table.get(), 

@@ -61,14 +61,13 @@ __inline__ __device__ void add_pair_to_cache(const size_type first,
 
 template< JoinType join_type,
           typename multimap_type,
-          typename gdf_table_type,
           typename key_type,
           typename size_type,
           int block_size,
           int output_cache_size>
 __global__ void compute_join_output_size( multimap_type const * const multi_map,
-                                          gdf_table_type const & build_table,
-                                          gdf_table_type const & probe_table,
+                                          gdf_table<size_type> const & build_table,
+                                          gdf_table<size_type> const & probe_table,
                                           key_type const * const probe_column,
                                           const size_type probe_table_size,
                                           size_type* output_size)

@@ -25,9 +25,9 @@
 
 template<JoinType join_type, 
          typename output_type,
-         typename gdf_table_type>
-mgpu::mem_t<output_type> join_hash(gdf_table_type const & left_table, 
-                                   gdf_table_type const & right_table, 
+         typename size_type>
+mgpu::mem_t<output_type> join_hash(gdf_table<size_type> const & left_table, 
+                                   gdf_table<size_type> const & right_table, 
                                    mgpu::context_t & context) 
 {
   mgpu::mem_t<output_type> joined_output;
@@ -38,33 +38,33 @@ mgpu::mem_t<output_type> join_hash(gdf_table_type const & left_table,
   {
     case GDF_INT8:    
       {
-        compute_hash_join<join_type, gdf_table_type, int8_t, output_type>(context, joined_output, left_table, right_table); 
+        compute_hash_join<join_type, int8_t, output_type>(context, joined_output, left_table, right_table); 
         break;
       }
     case GDF_INT16:   
       {
-        compute_hash_join<join_type, gdf_table_type, int16_t, output_type>(context, joined_output, left_table, right_table); 
+        compute_hash_join<join_type, int16_t, output_type>(context, joined_output, left_table, right_table); 
         break;
       }
     case GDF_INT32:   
       {
-        compute_hash_join<join_type, gdf_table_type, int32_t, output_type>(context, joined_output, left_table, right_table); 
+        compute_hash_join<join_type, int32_t, output_type>(context, joined_output, left_table, right_table); 
         break;
       }
     case GDF_INT64:   
       {
-        compute_hash_join<join_type, gdf_table_type, int64_t, output_type>(context, joined_output, left_table, right_table);                    
+        compute_hash_join<join_type, int64_t, output_type>(context, joined_output, left_table, right_table);                    
         break;
       }
     // For floating point types build column, treat as an integral type
     case GDF_FLOAT32: 
       {
-        compute_hash_join<join_type, gdf_table_type, int32_t, output_type>(context, joined_output, left_table, right_table);
+        compute_hash_join<join_type, int32_t, output_type>(context, joined_output, left_table, right_table);
         break;
       }
     case GDF_FLOAT64: 
       {
-        compute_hash_join<join_type, gdf_table_type, int64_t, output_type>(context, joined_output, left_table, right_table);
+        compute_hash_join<join_type, int64_t, output_type>(context, joined_output, left_table, right_table);
         break;
       }
     default:
