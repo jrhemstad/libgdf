@@ -93,6 +93,7 @@ public:
             const col_type my_elem = static_cast<col_type*>(d_columns_data[i])[my_row_index];
             const col_type other_elem = static_cast<col_type*>(other.d_columns_data[i])[other_row_index];
             is_equal = (my_elem == other_elem);
+            break;
           }
         case GDF_INT16:
           {
@@ -100,6 +101,7 @@ public:
             const col_type my_elem = static_cast<col_type*>(d_columns_data[i])[my_row_index];
             const col_type other_elem = static_cast<col_type*>(other.d_columns_data[i])[other_row_index];
             is_equal = (my_elem == other_elem);
+            break;
           }
         case GDF_INT32:
           {
@@ -107,6 +109,7 @@ public:
             const col_type my_elem = static_cast<col_type*>(d_columns_data[i])[my_row_index];
             const col_type other_elem = static_cast<col_type*>(other.d_columns_data[i])[other_row_index];
             is_equal = (my_elem == other_elem);
+            break;
           }
         case GDF_INT64:
           {
@@ -114,6 +117,7 @@ public:
             const col_type my_elem = static_cast<col_type*>(d_columns_data[i])[my_row_index];
             const col_type other_elem = static_cast<col_type*>(other.d_columns_data[i])[other_row_index];
             is_equal = (my_elem == other_elem);
+            break;
           }
         case GDF_FLOAT32:
           {
@@ -121,6 +125,7 @@ public:
             const col_type my_elem = static_cast<col_type*>(d_columns_data[i])[my_row_index];
             const col_type other_elem = static_cast<col_type*>(other.d_columns_data[i])[other_row_index];
             is_equal = (my_elem == other_elem);
+            break;
           }
         case GDF_FLOAT64:
           {
@@ -128,6 +133,7 @@ public:
             const col_type my_elem = static_cast<col_type*>(d_columns_data[i])[my_row_index];
             const col_type other_elem = static_cast<col_type*>(other.d_columns_data[i])[other_row_index];
             is_equal = (my_elem == other_elem);
+            break;
           }
         default:
           assert(false && "Attempted to compare unsupported GDF datatype");
