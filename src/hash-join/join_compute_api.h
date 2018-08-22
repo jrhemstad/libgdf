@@ -128,7 +128,7 @@ cudaError_t compute_hash_join(mgpu::context_t & compute_ctx,
   cudaMalloc(&join_output_size, sizeof(size_type));
   cudaMemset(join_output_size, 0, sizeof(size_type));
 
-  gdf_table<size_type> const & probe_table{right_table};
+  gdf_table<size_type> const & probe_table{left_table};
   const size_type probe_column_length{probe_table.get_column_length()};
   const key_type * const probe_column{static_cast<key_type*>(probe_table.get_probe_column_data())};
   const size_type probe_grid_size{(probe_column_length + block_size -1)/block_size};
