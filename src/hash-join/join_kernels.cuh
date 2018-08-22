@@ -369,6 +369,7 @@ __global__ void probe_hash_table( multimap_type const * const multi_map,
 }
 
 /*
+   // TODO This kernel still needs to be updated to work with an arbitrary number of columns
 template<
     typename multimap_type,
     typename key_type,
