@@ -23,6 +23,21 @@
 #include "sort-join.cuh"
 #include "gdf_table.cuh"
 
+ /* --------------------------------------------------------------------------*/
+ /** 
+  * @Synopsis  Computes the hash-based join between two sets of gdf_tables.
+  * 
+  * @Param left_table The left table to be joined
+  * @Param right_table The right table to be joined
+  * @Param context Modern GPU context
+  * @Param flip_indices Flag that indicates whether the left and right tables have been
+  * flipped, meaning the output indices should also be flipped.
+  * @tparam join_type The type of join to be performed
+  * @tparam output_type The datatype used for the output indices
+  * 
+  * @Returns   
+  */
+ /* ----------------------------------------------------------------------------*/
 template<JoinType join_type, 
          typename output_type,
          typename size_type>

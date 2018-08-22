@@ -142,11 +142,25 @@ DEF_OUTER_JOIN(f64, int64_t)
   if (T1 == GDF_DATE64)    { JOIN_HASH_T2(int64_t, l1, r1, T2, l2, r2, T3, l3, r3) } \
   if (T1 == GDF_TIMESTAMP) { JOIN_HASH_T2(int64_t, l1, r1, T2, l2, r2, T3, l3, r3) }
 
-// multi-column join function
+/* --------------------------------------------------------------------------*/
+/** 
+ * @Synopsis Computes the Join result between two tables using the hash-based implementation. 
+ * 
+ * @Param num_cols The number of columns to join
+ * @Param leftcol The left set of columns to join
+ * @Param rightcol The right set of columns to join
+ * @Param out_result The result of the join operation. The first n/2 elements of the
+   output are the left indices, the last n/2 elements of the output are the right indices.
+   @tparam join_type The type of join to be performed
+ * 
+ * @Returns Upon successful computation, returns GDF_SUCCESS. Otherwise returns appropriate error code 
+ */
+/* ----------------------------------------------------------------------------*/
 template <JoinType join_type, 
           typename size_type>
 gdf_error hash_join(size_type num_cols, gdf_column **leftcol, gdf_column **rightcol, gdf_join_result_type **out_result)
 {
+  // Wrap the set of gdf_columns in a gdf_table class
   std::unique_ptr< gdf_table<size_type> > left_table(new gdf_table<size_type>(num_cols, leftcol));
   std::unique_ptr< gdf_table<size_type> > right_table(new gdf_table<size_type>(num_cols, rightcol));
 
@@ -208,6 +222,22 @@ gdf_error sort_join_typed(gdf_column *leftcol, gdf_column *rightcol,
   return err;
 }
 
+/* --------------------------------------------------------------------------*/
+/** 
+ * @Synopsis  Computes the join operation between a single left and single right column
+ using the sort based implementation.
+ * 
+ * @Param leftcol The left column to join
+ * @Param rightcol The right column to join
+ * @Param out_result The output of the join operation
+ * @Param ctxt Structure that determines various run parameters, such as if the inputs
+ are already sorted.
+   @tparama join_type The type of join to perform
+ * 
+ * @Returns GDF_SUCCESS upon succesful completion of the join, otherwise returns 
+ appropriate error code.
+ */
+/* ----------------------------------------------------------------------------*/
 template <JoinType join_type>
 gdf_error sort_join(gdf_column *leftcol, gdf_column *rightcol,
                     gdf_join_result_type **out_result, gdf_context *ctxt) 
@@ -233,6 +263,22 @@ template
 gdf_error sort_join<JoinType::LEFT_JOIN>(gdf_column *leftcol, gdf_column *rightcol,
                              gdf_join_result_type **out_result, gdf_context *ctxt);
 
+/* --------------------------------------------------------------------------*/
+/** 
+ * @Synopsis  Computes the join operation between two sets of columns
+ * 
+ * @Param num_cols The number of columns to join
+ * @Param leftcol The left set of columns to join
+ * @Param rightcol The right set of columns to join
+ * @Param out_result The result of the join operation. The output is structured such that
+ * the pair (i, i + output_size/2) is the (left, right) index of matching rows.
+ * @Param join_context A structure that determines various run parameters, such as
+   whether to perform a hash or sort based join
+ * @tparam join_type The type of join to be performed
+ * 
+ * @Returns GDF_SUCCESS upon succesfull compute, otherwise returns appropriate error code
+ */
+/* ----------------------------------------------------------------------------*/
 template <JoinType join_type>
 gdf_error join_call( int num_cols, gdf_column **leftcol, gdf_column **rightcol,
                      gdf_join_result_type **out_result, gdf_context *join_context) 
@@ -270,6 +316,7 @@ gdf_error join_call( int num_cols, gdf_column **leftcol, gdf_column **rightcol,
       }
     case GDF_SORT:
       {
+        // Sort based joins only support single column joins
         if(1 == num_cols)
         {
           return sort_join<join_type>(leftcol[0], rightcol[0], out_result, join_context);

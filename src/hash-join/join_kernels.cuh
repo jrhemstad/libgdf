@@ -27,6 +27,19 @@ enum class JoinType {
 
 constexpr int warp_size = 32;
 
+/* --------------------------------------------------------------------------*/
+/** 
+* @Synopsis  Builds a hash table from a gdf_table that maps the values of the build
+* column to its respective row indices.
+* 
+* @Param multi_map The hash table to be built
+* @Param build_column The column from the build table to build the hash table on
+* @Param build_column_size The size of the build column
+* @tparam multimap_type The type of the hash table
+* @tparam key_type The datatype used for the Keys in the hash table
+* 
+*/
+/* ----------------------------------------------------------------------------*/
 template<typename multimap_type,
          typename key_type = typename multimap_type::key_type,
          typename size_type = typename multimap_type::size_type>
@@ -41,6 +54,19 @@ __global__ void build_hash_table( multimap_type * const multi_map,
     }
 }
 
+/* --------------------------------------------------------------------------*/
+/** 
+* @Synopsis  Adds a pair of indices to the shared memory cache
+* 
+* @Param first The first index in the pair
+* @Param second The second index in the pair
+* @Param current_idx_shared Pointer to shared index that determines where in the shared
+memory cache the pair will be written
+* @Param warp_id The ID of the warp of the calling the thread
+* @Param joined_shared Pointer to the shared memory cache
+* 
+*/
+/* ----------------------------------------------------------------------------*/
 template<typename size_type,
          typename join_output_pair>
 __inline__ __device__ void add_pair_to_cache(const size_type first, 
@@ -59,6 +85,24 @@ __inline__ __device__ void add_pair_to_cache(const size_type first,
   joined_shared[my_current_idx] = joined_val;
 }
 
+/* --------------------------------------------------------------------------*/
+/** 
+* @Synopsis  Computes the output size of joining the probe table to the build table.
+* 
+* @Param[in] multi_map The hash table built on the build table
+* @Param[in] build_table The build table
+* @Param[in] probe_table The probe table
+* @Param[in] probe_column The column to be used to probe the hash table for potential matches
+* @Param[in] probe_table_size The length of the probe table's columns
+* @Param[out] output_size The resulting output size
+  @tparam join_type The type of join to be performed
+  @tparam multimap_type The datatype of the hash table
+  @tparam key_type The datatype of the Keys in the hash table
+  @tparam block_size The number of threads in a thread block for the kernel
+  @tparam output_cache_size The size of the shared memory cache for caching the join output results
+* 
+*/
+/* ----------------------------------------------------------------------------*/
 template< JoinType join_type,
           typename multimap_type,
           typename key_type,
@@ -149,6 +193,29 @@ __global__ void compute_join_output_size( multimap_type const * const multi_map,
 }
 
 
+/* --------------------------------------------------------------------------*/
+/** 
+ * @Synopsis  Uses the hash table built from the build table to compute the 
+ result of the join operation.
+ * 
+ * @Param multi_map The hash table built from the build table
+ * @Param build_table The build table
+ * @Param probe_table The probe table
+ * @Param probe_column The column from the probe table that is used to probe the hash table
+ * @Param probe_table_size The length of the columns in the probe table
+ * @Param join_output The result of the join operation
+ * @Param current_idx A global counter used by threads to coordinate writes to the global output
+ * @Param max_size The maximum size of the output
+ * @Param offset An optional offset
+ * @tparam join_type The type of join to be performed
+ * @tparam multimap_type The type of the hash table
+ * @tparam key_type The data type of the Keys in the hash table
+ * @tparam join_output_pair The pair datatype used for the join result
+ * @tparam block_size The number of threads per block for this kernel
+ * @tparam output_cache_size The side of the shared memory buffer to cache join output results
+ * 
+ */
+/* ----------------------------------------------------------------------------*/
 template< JoinType join_type,
           typename multimap_type,
           typename key_type,

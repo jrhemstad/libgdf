@@ -63,9 +63,24 @@ void pairs_to_decoupled(mgpu::mem_t<size_type> &output, const size_type output_n
 }
 
 
-/// \brief Performs a generic hash based join of columns a and b. Works for both inner and left joins.
-///
-/// \param[in] compute_ctx The CudaComputeContext to shedule this to.
+/* --------------------------------------------------------------------------*/
+/** 
+* @Synopsis  Performs a hash-based join between two sets of gdf_tables.
+* 
+* @Param compute_ctx The Modern GPU context
+* @Param joined_output The output of the join operation
+* @Param left_table The left table to join
+* @Param right_table The right table to join
+* @Param flip_results Flag that indicates whether the left and right tables have been 
+* switched, indicating that the output indices should also be flipped
+* @tparam join_type The type of join to be performed
+* @tparam key_type The data type to be used for the Keys in the hash table
+* @tparam index_type The data type to be used for the output indices
+* 
+* @Returns  cudaSuccess upon successful completion of the join. Otherwise returns
+* the appropriate CUDA error code
+*/
+/* ----------------------------------------------------------------------------*/
 template<JoinType join_type, 
          typename key_type, 
          typename index_type,
@@ -79,8 +94,12 @@ cudaError_t compute_hash_join(mgpu::context_t & compute_ctx,
 
   cudaError_t error(cudaSuccess);
 
+  // Data type used for join output results. Stored as a pair of indices 
+  // (left index, right index) where left_table[left index] == right_table[right index]
   using join_output_pair = join_pair<index_type>;
   
+  // The LEGACY allocator allocates the hash table array with normal cudaMalloc,
+  // the non-legacy allocator uses managed memory
 #ifdef HT_LEGACY_ALLOCATOR
   using multimap_type = concurrent_unordered_multimap<key_type, 
                                                       index_type, 
@@ -98,11 +117,12 @@ cudaError_t compute_hash_join(mgpu::context_t & compute_ctx,
                                                       std::numeric_limits<size_type>::max()>;
 #endif
 
-  // TODO Make the build table the smaller table
+  // Hash table will be built on the right table
   gdf_table<size_type> const & build_table{right_table};
   const size_type build_column_length{build_table.get_column_length()};
   const key_type * const build_column{static_cast<key_type*>(build_table.get_build_column_data())};
 
+  // Allocate the hash table
   const size_type hash_table_size = (static_cast<size_type>(build_column_length) * 100 / DEFAULT_HASH_TABLE_OCCUPANCY);
   std::unique_ptr<multimap_type> hash_table(new multimap_type(hash_table_size));
   
@@ -113,7 +133,7 @@ cudaError_t compute_hash_join(mgpu::context_t & compute_ctx,
   
   CUDA_RT_CALL( cudaDeviceSynchronize() );
 
-  // step 2: build the HT 
+  // build the hash table
   constexpr int block_size = DEFAULT_CUDA_BLOCK_SIZE;
   const size_type build_grid_size{(build_column_length + block_size - 1)/block_size};
   build_hash_table<<<build_grid_size, block_size>>>(hash_table.get(), 
@@ -122,17 +142,19 @@ cudaError_t compute_hash_join(mgpu::context_t & compute_ctx,
   
   CUDA_RT_CALL( cudaGetLastError() );
 
-  // step 3ab: scan table A (left), probe the HT without outputting the joined indices. 
-  // Only get number of outputted elements.
+  // Allocate storage for the counter used to get the size of the join output
   size_type * d_join_output_size;
   cudaMalloc(&d_join_output_size, sizeof(size_type));
   cudaMemset(d_join_output_size, 0, sizeof(size_type));
 
+  // Probe with the left table
   gdf_table<size_type> const & probe_table{left_table};
   const size_type probe_column_length{probe_table.get_column_length()};
   const key_type * const probe_column{static_cast<key_type*>(probe_table.get_probe_column_data())};
   const size_type probe_grid_size{(probe_column_length + block_size -1)/block_size};
 
+  // Probe the hash table without actually building the output to simply
+  // find what the size of the output will be.
   compute_join_output_size<join_type, 
                            multimap_type, 
                            key_type, 
@@ -148,6 +170,7 @@ cudaError_t compute_hash_join(mgpu::context_t & compute_ctx,
 
   CUDA_RT_CALL( cudaGetLastError() );
 
+  // Copy output size from the device to host
   size_type h_join_output_size{0};
   CUDA_RT_CALL( cudaMemcpy(&h_join_output_size, d_join_output_size, sizeof(size_type), cudaMemcpyDeviceToHost));
   
@@ -156,12 +179,13 @@ cudaError_t compute_hash_join(mgpu::context_t & compute_ctx,
     return error;
   }
 
+  // Allocate modern GPU storage for the join output
   int dev_ordinal{0};
   join_output_pair* tempOut{nullptr};
   CUDA_RT_CALL( cudaGetDevice(&dev_ordinal));
   joined_output = mgpu::mem_t<size_type> (2 * (h_join_output_size), compute_ctx);
 
-  // Allocate device buffer for join output
+  // Allocate temporary device buffer for join output
   CUDA_RT_CALL( cudaMallocManaged   ( &tempOut, sizeof(join_output_pair)*h_join_output_size));
   CUDA_RT_CALL( cudaMemPrefetchAsync( tempOut , sizeof(join_output_pair)*h_join_output_size, dev_ordinal));
 
@@ -170,7 +194,7 @@ cudaError_t compute_hash_join(mgpu::context_t & compute_ctx,
   CUDA_RT_CALL( cudaMalloc(&d_global_write_index, sizeof(size_type)) );
   CUDA_RT_CALL( cudaMemsetAsync(d_global_write_index, 0, sizeof(size_type), 0) );
 
-  // step 3b: scan table A (left), probe the HT and output the joined indices - doing left join here
+  // Do the probe of the hash table with the probe table and generate the output for the join
   probe_hash_table<join_type, 
                    multimap_type, 
                    key_type, 
@@ -193,9 +217,13 @@ cudaError_t compute_hash_join(mgpu::context_t & compute_ctx,
   CUDA_RT_CALL( cudaFree(d_global_write_index) );
   CUDA_RT_CALL( cudaFree(d_join_output_size) ); 
 
+  // Transform the join output from an array of pairs, to an array of indices where the first
+  // n/2 elements are the left indices and the last n/2 elements are the right indices
   pairs_to_decoupled(joined_output, h_join_output_size, tempOut, compute_ctx, flip_results);
 
+  // Free temporary device buffer
   CUDA_RT_CALL( cudaFree(tempOut) );
+
   return error;
 }
 
