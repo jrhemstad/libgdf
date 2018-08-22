@@ -60,9 +60,11 @@ public:
     return host_columns[build_column_index]->data;
   }
 
-  void print_row(const size_type row_index) const
+  __host__ 
+  void print_row(const size_type row_index, char * msg = "") const
   {
-    printf("(");
+    char row[256];
+    sprintf(row,"(");
     for(size_type i = 0; i < num_columns; ++i)
     {
       const gdf_dtype col_type = d_columns_types[i];
@@ -71,40 +73,42 @@ public:
       {
         case GDF_INT8:
           {
-            printf("%d", static_cast<int8_t*>(d_columns_data[i])[row_index]);
+            sprintf(row,"%d", static_cast<int8_t*>(d_columns_data[i])[row_index]);
             break;
           }
         case GDF_INT16:
           {
-            printf("%d", static_cast<int16_t*>(d_columns_data[i])[row_index]);
+            sprintf(row,"%d", static_cast<int16_t*>(d_columns_data[i])[row_index]);
             break;
           }
         case GDF_INT32:
           {
-            printf("%d", static_cast<int32_t*>(d_columns_data[i])[row_index]);
+            sprintf(row,"%d", static_cast<int32_t*>(d_columns_data[i])[row_index]);
             break;
           }
         case GDF_INT64:
           {
-            printf("%ld", static_cast<int64_t*>(d_columns_data[i])[row_index]);
+            sprintf(row,"%ld", static_cast<int64_t*>(d_columns_data[i])[row_index]);
             break;
           }
         case GDF_FLOAT32:
           {
-            printf("%f", static_cast<float*>(d_columns_data[i])[row_index]);
+            sprintf(row,"%f", static_cast<float*>(d_columns_data[i])[row_index]);
             break;
           }
         case GDF_FLOAT64:
           {
-            printf("%f", static_cast<double*>(d_columns_data[i])[row_index]);
+            sprintf(row,"%f", static_cast<double*>(d_columns_data[i])[row_index]);
             break;
           }
         default:
           assert(false && "Attempted to compare unsupported GDF datatype");
       }
-      printf(", ");
+      sprintf(row,", ");
     }
-    printf(")\n");
+    sprintf(row,")\n");
+
+    printf("%s %s", msg, row);
 
   }
 
@@ -125,13 +129,16 @@ public:
                   const size_type other_row_index) const
   {
 
-    bool is_equal{true};
-
     for(size_type i = 0; i < num_columns; ++i)
     {
       const gdf_dtype my_col_type = d_columns_types[i];
       const gdf_dtype other_col_type = other.d_columns_types[i];
-      assert(my_col_type == other_col_type && "Attempted to compare columns of different types.");
+    
+      if(my_col_type != other_col_type)
+      {
+        printf("Attempted to compare columns of different types.\n");
+        return false;
+      }
 
       switch(my_col_type)
       {
@@ -140,7 +147,8 @@ public:
             using col_type = int8_t;
             const col_type my_elem = static_cast<col_type*>(d_columns_data[i])[my_row_index];
             const col_type other_elem = static_cast<col_type*>(other.d_columns_data[i])[other_row_index];
-            is_equal = (my_elem == other_elem);
+            if(my_elem != other_elem)
+              return false;
             break;
           }
         case GDF_INT16:
@@ -148,7 +156,8 @@ public:
             using col_type = int16_t;
             const col_type my_elem = static_cast<col_type*>(d_columns_data[i])[my_row_index];
             const col_type other_elem = static_cast<col_type*>(other.d_columns_data[i])[other_row_index];
-            is_equal = (my_elem == other_elem);
+            if(my_elem != other_elem)
+              return false;
             break;
           }
         case GDF_INT32:
@@ -156,7 +165,8 @@ public:
             using col_type = int32_t;
             const col_type my_elem = static_cast<col_type*>(d_columns_data[i])[my_row_index];
             const col_type other_elem = static_cast<col_type*>(other.d_columns_data[i])[other_row_index];
-            is_equal = (my_elem == other_elem);
+            if(my_elem != other_elem)
+              return false;
             break;
           }
         case GDF_INT64:
@@ -164,7 +174,8 @@ public:
             using col_type = int64_t;
             const col_type my_elem = static_cast<col_type*>(d_columns_data[i])[my_row_index];
             const col_type other_elem = static_cast<col_type*>(other.d_columns_data[i])[other_row_index];
-            is_equal = (my_elem == other_elem);
+            if(my_elem != other_elem)
+              return false;
             break;
           }
         case GDF_FLOAT32:
@@ -172,7 +183,8 @@ public:
             using col_type = float;
             const col_type my_elem = static_cast<col_type*>(d_columns_data[i])[my_row_index];
             const col_type other_elem = static_cast<col_type*>(other.d_columns_data[i])[other_row_index];
-            is_equal = (my_elem == other_elem);
+            if(my_elem != other_elem)
+              return false;
             break;
           }
         case GDF_FLOAT64:
@@ -180,15 +192,17 @@ public:
             using col_type = double;
             const col_type my_elem = static_cast<col_type*>(d_columns_data[i])[my_row_index];
             const col_type other_elem = static_cast<col_type*>(other.d_columns_data[i])[other_row_index];
-            is_equal = (my_elem == other_elem);
+            if(my_elem != other_elem)
+              return false;
             break;
           }
         default:
-          assert(false && "Attempted to compare unsupported GDF datatype");
+          printf("Attempted to compare columns of unsupported GDF datatype\n");
+          return false;
       }
     }
 
-    return is_equal;
+    return true;
   }
 
   /* --------------------------------------------------------------------------*/
