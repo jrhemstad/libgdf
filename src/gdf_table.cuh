@@ -60,6 +60,54 @@ public:
     return host_columns[build_column_index]->data;
   }
 
+  void print_row(const size_type row_index) const
+  {
+    printf("(");
+    for(size_type i = 0; i < num_columns; ++i)
+    {
+      const gdf_dtype col_type = d_columns_types[i];
+
+      switch(col_type)
+      {
+        case GDF_INT8:
+          {
+            printf("%d", static_cast<int8_t*>(d_columns_data[i])[row_index]);
+            break;
+          }
+        case GDF_INT16:
+          {
+            printf("%d", static_cast<int16_t*>(d_columns_data[i])[row_index]);
+            break;
+          }
+        case GDF_INT32:
+          {
+            printf("%d", static_cast<int32_t*>(d_columns_data[i])[row_index]);
+            break;
+          }
+        case GDF_INT64:
+          {
+            printf("%ld", static_cast<int64_t*>(d_columns_data[i])[row_index]);
+            break;
+          }
+        case GDF_FLOAT32:
+          {
+            printf("%f", static_cast<float*>(d_columns_data[i])[row_index]);
+            break;
+          }
+        case GDF_FLOAT64:
+          {
+            printf("%f", static_cast<double*>(d_columns_data[i])[row_index]);
+            break;
+          }
+        default:
+          assert(false && "Attempted to compare unsupported GDF datatype");
+      }
+      printf(", ");
+    }
+    printf(")\n");
+
+  }
+
     /* --------------------------------------------------------------------------*/
     /** 
      * @Synopsis  Checks for equality between a row in this table and another table.
