@@ -534,17 +534,25 @@ typedef ::testing::Types<
                           TestParameters< join_op::INNER, HASH, VTuple<int32_t , uint32_t, float  > >,
                           TestParameters< join_op::INNER, HASH, VTuple<uint64_t, uint32_t, float  > >,
                           TestParameters< join_op::INNER, HASH, VTuple<float   , double  , float  > >,
-                          TestParameters< join_op::INNER, HASH, VTuple<double  , uint32_t, int64_t> >
-                          // Four column test will fail because gdf_join is limited to 3 columns
-                          //TestParameters< join_op::LEFT, HASH, VTuple<double, kint32_t, int64_t, int32_t> >
+                          TestParameters< join_op::INNER, HASH, VTuple<double  , uint32_t, int64_t> >,
+                          // Four column test for Left Joins
+                          TestParameters< join_op::LEFT, HASH, VTuple<double, int32_t, int64_t, int32_t> >,
+                          TestParameters< join_op::LEFT, HASH, VTuple<float, uint32_t, double, int32_t> >,
+                          // Four column test for Inner Joins
+                          TestParameters< join_op::INNER, HASH, VTuple<uint32_t, float, int64_t, int32_t> >,
+                          TestParameters< join_op::INNER, HASH, VTuple<double, float, int64_t, double> >,
+                          // Five column test for Left Joins
+                          TestParameters< join_op::LEFT, HASH, VTuple<double, int32_t, int64_t, int32_t, int32_t> >,
+                          // Five column test for Inner Joins
+                          TestParameters< join_op::INNER, HASH, VTuple<uint32_t, float, int64_t, int32_t, float> >
                           > Implementations;
 
 TYPED_TEST_CASE(JoinTest, Implementations);
 
 TYPED_TEST(JoinTest, ExampleTest)
 {
-  this->create_input(10000, 100,
-                     10000, 100);
+  this->create_input(10, 2,
+                     10, 2);
 
   std::vector<result_type> reference_result = this->compute_reference_solution();
 
@@ -560,8 +568,8 @@ TYPED_TEST(JoinTest, ExampleTest)
 
 TYPED_TEST(JoinTest, EqualValues)
 {
-  this->create_input(1000,1,
-                     1000,1);
+  this->create_input(100,1,
+                     100,1);
 
   std::vector<result_type> reference_result = this->compute_reference_solution();
 
