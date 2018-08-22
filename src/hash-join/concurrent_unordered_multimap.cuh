@@ -377,7 +377,7 @@ public:
     {
         const size_type hashtbl_size    = m_hashtbl_size;
         value_type* hashtbl_values      = m_hashtbl_values;
-        const size_type key_hash        = m_hf( x.first );
+        const auto key_hash        = m_hf( x.first );
         size_type hash_tbl_idx          = key_hash%hashtbl_size;
         
         value_type* it = 0;
@@ -431,7 +431,7 @@ public:
     __forceinline__
     __host__ __device__ const_iterator find(const key_type& k ) const
     {
-        size_type key_hash = m_hf( k );
+        const auto key_hash = m_hf( k );
         size_type hash_tbl_idx = key_hash%m_hashtbl_size;
         
         value_type* begin_ptr = 0;
