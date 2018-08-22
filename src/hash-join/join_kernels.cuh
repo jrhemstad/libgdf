@@ -112,9 +112,12 @@ __global__ void compute_join_output_size( multimap_type const * const multi_map,
           {
 
             // Continue searching for matching rows until you hit an empty hash table entry
-            if(end == ++found)
+            ++found;
+            if(end == found)
               found = multi_map->begin();
-            running = (unused_key == found->first);
+
+            if(unused_key == found->first)
+              running = false;
           }
           else 
           {
@@ -123,10 +126,12 @@ __global__ void compute_join_output_size( multimap_type const * const multi_map,
             atomicAdd(&block_counter,static_cast<size_type>(1)) ;
 
             // Continue searching for matching rows until you hit an empty hash table entry
-            if(end == ++found)
+            ++found;
+            if(end == found)
               found = multi_map->begin();
 
-            running = (unused_key == found->first);
+            if(unused_key == found->first)
+              running = false;
           }
 
           if ((join_type == JoinType::LEFT_JOIN) && (!running) && (!found_match)) {
@@ -209,10 +214,12 @@ __global__ void probe_hash_table( multimap_type const * const multi_map,
           else if ( false == probe_table.rows_equal(build_table, probe_row_index, found->second) ){
 
             // Keep searching for matches until you encounter an empty hash table location 
-            if(end == ++found) {
+            ++found;
+            if(end == found)
               found = multi_map->begin();
-            }
-            running = (unused_key == found->first);
+
+            if(unused_key == found->first)
+              running = false;
           }
           else {
             found_match = true;
@@ -220,10 +227,12 @@ __global__ void probe_hash_table( multimap_type const * const multi_map,
             add_pair_to_cache(offset + probe_row_index, found->second, current_idx_shared, warp_id, join_output_shared[warp_id]);
 
             // Keep searching for matches until you encounter an empty hash table location 
-            if(end == ++found) {
+            ++found;
+            if(end == found)
               found = multi_map->begin();
-            }
-            running = (unused_key == found->first);
+
+            if(unused_key == found->first)
+              running = false;
           }
           if ((join_type == JoinType::LEFT_JOIN) && (!running) && (!found_match)) {
             add_pair_to_cache(offset + probe_row_index, JoinNoneValue, current_idx_shared, warp_id, join_output_shared[warp_id]);
