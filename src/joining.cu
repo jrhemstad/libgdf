@@ -62,6 +62,7 @@ size_t gdf_join_result_size(gdf_join_result_type *result) {
 using output_type = int;
 constexpr output_type MAX_JOIN_SIZE{std::numeric_limits<output_type>::max()};
 
+// TODO This macro stuff will go away once Outer join is implemented
 #define DEF_JOIN(Fn, T, Joiner)                                             \
 gdf_error gdf_##Fn(gdf_column *leftcol, gdf_column *rightcol,               \
                    gdf_join_result_type **out_result) {                     \
