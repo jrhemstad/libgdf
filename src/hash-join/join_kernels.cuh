@@ -108,7 +108,7 @@ __global__ void compute_join_output_size( multimap_type const * const multi_map,
           else if ( unused_key == found->first ) {
             running = false;
           }
-          else if (probe_table.rows_equal(build_table, probe_row_index, found->second))
+          else if (false == probe_table.rows_equal(build_table, probe_row_index, found->second))
           {
 
             // Continue searching for matching rows until you hit an empty hash table entry
