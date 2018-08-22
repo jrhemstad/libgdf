@@ -453,7 +453,10 @@ struct JoinTest : public testing::Test
 // tests .Here join_operation refers to the type of join eg. INNER,
 // LEFT, OUTER and join_method refers to the underlying join algorithm
 //that performs it eg. GDF_HASH or GDF_SORT.
-template<join_op join_operation, gdf_method join_method, typename tuple_of_vectors>
+template<join_op join_operation, 
+         gdf_method join_method, 
+         typename tuple_of_vectors,
+         bool keys_are_unique = false>
 struct TestParameters
 {
   // The method to use for the join
@@ -464,6 +467,8 @@ struct TestParameters
 
   // The tuple of vectors that determines the number and types of the columns to join
   using multi_column_t = tuple_of_vectors;
+
+  const static bool unique_keys{keys_are_unique};
 };
 
 const static gdf_method HASH = gdf_method::GDF_HASH;
