@@ -585,8 +585,8 @@ TYPED_TEST(JoinTest, EqualValues)
 
 TYPED_TEST(JoinTest, MaxRandomValues)
 {
-  this->create_input(1000,RAND_MAX,
-                     1000,RAND_MAX);
+  this->create_input(10000,RAND_MAX,
+                     10000,RAND_MAX);
 
   std::vector<result_type> reference_result = this->compute_reference_solution();
 
@@ -602,8 +602,8 @@ TYPED_TEST(JoinTest, MaxRandomValues)
 
 TYPED_TEST(JoinTest, LeftColumnsBigger)
 {
-  this->create_input(1000,100,
-                     10,100);
+  this->create_input(10000,100,
+                     100,100);
 
   std::vector<result_type> reference_result = this->compute_reference_solution();
 
@@ -619,8 +619,8 @@ TYPED_TEST(JoinTest, LeftColumnsBigger)
 
 TYPED_TEST(JoinTest, RightColumnsBigger)
 {
-  this->create_input(10,100,
-                     1000,100);
+  this->create_input(100,100,
+                     10000,100);
 
   std::vector<result_type> reference_result = this->compute_reference_solution();
 
