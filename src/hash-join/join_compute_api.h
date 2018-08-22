@@ -124,9 +124,9 @@ cudaError_t compute_hash_join(mgpu::context_t & compute_ctx,
 
   // step 3ab: scan table A (left), probe the HT without outputting the joined indices. 
   // Only get number of outputted elements.
-  size_type * join_output_size;
-  cudaMalloc(&join_output_size, sizeof(size_type));
-  cudaMemset(join_output_size, 0, sizeof(size_type));
+  size_type * d_join_output_size;
+  cudaMalloc(&d_join_output_size, sizeof(size_type));
+  cudaMemset(d_join_output_size, 0, sizeof(size_type));
 
   gdf_table<size_type> const & probe_table{left_table};
   const size_type probe_column_length{probe_table.get_column_length()};
@@ -144,12 +144,12 @@ cudaError_t compute_hash_join(mgpu::context_t & compute_ctx,
                                     probe_table, 
                                     probe_column,
                                     probe_table.get_column_length(),
-                                    join_output_size);
+                                    d_join_output_size);
 
   CUDA_RT_CALL( cudaGetLastError() );
 
   size_type h_join_output_size{0};
-  CUDA_RT_CALL( cudaMemcpy(&h_join_output_size, join_output_size, sizeof(size_type), cudaMemcpyDeviceToHost));
+  CUDA_RT_CALL( cudaMemcpy(&h_join_output_size, d_join_output_size, sizeof(size_type), cudaMemcpyDeviceToHost));
   
   // If the output size is zero, return immediately
   if(0 == h_join_output_size){
@@ -187,17 +187,15 @@ cudaError_t compute_hash_join(mgpu::context_t & compute_ctx,
                                      d_global_write_index, 
                                      h_join_output_size);
 
-  /*
-  error = cudaDeviceSynchronize();
+  CUDA_RT_CALL(cudaDeviceSynchronize());
 
   // free memory used for the counters
   CUDA_RT_CALL( cudaFree(d_global_write_index) );
-  CUDA_RT_CALL( cudaFree(d_actualFound) ); 
+  CUDA_RT_CALL( cudaFree(d_join_output_size) ); 
 
   pairs_to_decoupled(joined_output, h_join_output_size, tempOut, compute_ctx, flip_results);
 
   CUDA_RT_CALL( cudaFree(tempOut) );
-  */
   return error;
 }
 
