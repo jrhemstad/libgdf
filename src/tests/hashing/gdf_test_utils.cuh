@@ -20,6 +20,8 @@
 #include "../join/tuple_vectors.h"
 #include <gdf/gdf.h>
 #include <gdf/cffi/functions.h>
+#include <gdf/utils.h>
+#include "../../util/bit_util.cuh"
 
 // Type for a unique_ptr to a gdf_column with a custom deleter
 // Custom deleter is defined at construction
@@ -35,8 +37,9 @@ using gdf_col_pointer = typename std::unique_ptr<gdf_column,
  * @Returns A unique_ptr wrapping the new gdf_column
  */
 /* ----------------------------------------------------------------------------*/
-  template <typename col_type>
-gdf_col_pointer create_gdf_column(std::vector<col_type> const & host_vector)
+template <typename col_type>
+gdf_col_pointer create_gdf_column(std::vector<col_type> const & host_vector,
+                                  std::vector<gdf_valid_type> const & valid_vector = std::vector<gdf_valid_type>())
 {
   // Deduce the type and set the gdf_dtype accordingly
   gdf_dtype gdf_col_type;
@@ -53,15 +56,31 @@ gdf_col_pointer create_gdf_column(std::vector<col_type> const & host_vector)
 
   // Create a new instance of a gdf_column with a custom deleter that will free
   // the associated device memory when it eventually goes out of scope
-  auto deleter = [](gdf_column* col){col->size = 0; cudaFree(col->data);};
+  auto deleter = [](gdf_column* col){
+                                      col->size = 0; 
+                                      if(nullptr != col->data){cudaFree(col->data);} 
+                                      if(nullptr != col->valid){cudaFree(col->valid);}
+                                    };
   gdf_col_pointer the_column{new gdf_column, deleter};
 
   // Allocate device storage for gdf_column and copy contents from host_vector
   cudaMalloc(&(the_column->data), host_vector.size() * sizeof(col_type));
   cudaMemcpy(the_column->data, host_vector.data(), host_vector.size() * sizeof(col_type), cudaMemcpyHostToDevice);
 
+
+  // If a validity bitmask vector was passed in, allocate device storage 
+  // and copy its contents from the host vector
+  if(valid_vector.size() > 0)
+  {
+    cudaMalloc(&(the_column->valid), valid_vector.size() * sizeof(gdf_valid_type));
+    cudaMemcpy(the_column->valid, valid_vector.data(), valid_vector.size() * sizeof(gdf_valid_type), cudaMemcpyHostToDevice);
+  }
+  else
+  {
+    the_column->valid = nullptr;
+  }
+
   // Fill the gdf_column members
-  the_column->valid = nullptr;
   the_column->size = host_vector.size();
   the_column->dtype = gdf_col_type;
   gdf_dtype_extra_info extra_info;
@@ -73,32 +92,61 @@ gdf_col_pointer create_gdf_column(std::vector<col_type> const & host_vector)
 
 // Compile time recursion to convert each vector in a tuple of vectors into
 // a gdf_column and append it to a vector of gdf_columns
-template<std::size_t I = 0, typename... Tp>
+template<typename valid_initializer_t, std::size_t I = 0, typename... Tp>
   inline typename std::enable_if<I == sizeof...(Tp), void>::type
-convert_tuple_to_gdf_columns(std::vector<gdf_col_pointer> &gdf_columns,std::tuple<std::vector<Tp>...>& t)
+convert_tuple_to_gdf_columns(std::vector<gdf_col_pointer> &gdf_columns,std::tuple<std::vector<Tp>...>& t, 
+                             valid_initializer_t bit_initializer)
 {
   //bottom of compile-time recursion
   //purposely empty...
 }
-template<std::size_t I = 0, typename... Tp>
+template<typename valid_initializer_t, std::size_t I = 0, typename... Tp>
   inline typename std::enable_if<I < sizeof...(Tp), void>::type
-convert_tuple_to_gdf_columns(std::vector<gdf_col_pointer> &gdf_columns,std::tuple<std::vector<Tp>...>& t)
+convert_tuple_to_gdf_columns(std::vector<gdf_col_pointer> &gdf_columns,std::tuple<std::vector<Tp>...>& t,
+                             valid_initializer_t bit_initializer)
 {
+
+  const size_t num_rows = std::get<I>(t).size();
+  const size_t num_masks = gdf_get_num_chars_bitmask(num_rows);
+
+  // Initialize the valid mask for this column using the initializer
+  std::vector<gdf_valid_type> valid_masks(num_masks,0);
+  const size_t column = I;
+  for(size_t row = 0; row < num_rows; ++row){
+    if(true == bit_initializer(row, column))
+    {
+      gdf::util::turn_bit_on(valid_masks.data(), row);
+    }
+  }
+
   // Creates a gdf_column for the current vector and pushes it onto
   // the vector of gdf_columns
-  gdf_columns.push_back(create_gdf_column(std::get<I>(t)));
+  gdf_columns.push_back(create_gdf_column(std::get<I>(t), valid_masks));
 
   //recurse to next vector in tuple
-  convert_tuple_to_gdf_columns<I + 1, Tp...>(gdf_columns, t);
+  convert_tuple_to_gdf_columns<valid_initializer_t,I + 1, Tp...>(gdf_columns, t, bit_initializer);
 }
 
 // Converts a tuple of host vectors into a vector of gdf_columns
-template<typename... Tp>
-std::vector<gdf_col_pointer> initialize_gdf_columns(std::tuple<std::vector<Tp>...> & host_columns)
+
+template<typename valid_initializer_t, typename... Tp>
+std::vector<gdf_col_pointer> initialize_gdf_columns(std::tuple<std::vector<Tp>...> & host_columns, 
+                                                    valid_initializer_t bit_initializer)
 {
   std::vector<gdf_col_pointer> gdf_columns;
-  convert_tuple_to_gdf_columns(gdf_columns, host_columns);
+  convert_tuple_to_gdf_columns(gdf_columns, host_columns, bit_initializer);
   return gdf_columns;
 }
+
+
+// Overload for default initialization of validity bitmasks which 
+// sets every element to valid
+template<typename... Tp>
+std::vector<gdf_col_pointer> initialize_gdf_columns(std::tuple<std::vector<Tp>...> & host_columns )
+{
+  return initialize_gdf_columns(host_columns, 
+                                [](const size_t row, const size_t col){return true;});
+}
+
 
 #endif
