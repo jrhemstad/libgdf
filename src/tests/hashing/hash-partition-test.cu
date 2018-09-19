@@ -97,10 +97,20 @@ struct HashPartitionTest : public testing::Test
   void create_input( size_t num_rows, size_t max_value,
                      bool print = false)
   {
-    initialize_tuple(input_columns, num_rows, max_value);
-    initialize_tuple(output_columns, num_rows, max_value);
+    initialize_tuple(input_columns, num_rows);
+    initialize_tuple(output_columns, num_rows);
 
-    gdf_input_columns = initialize_gdf_columns(input_columns);
+    gdf_input_columns = initialize_gdf_columns(input_columns, [](size_t row, size_t col)
+                                                                {
+                                                                  if((row % 2 == 0) 
+                                                                      && (col % 2 == 0)){
+                                                                    return false;
+                                                                  }
+                                                                  else{
+                                                                    return true;
+                                                                  }
+
+                                                                });
     gdf_output_columns = initialize_gdf_columns(output_columns);
 
     // Fill vector of raw pointers to gdf_columns
@@ -152,6 +162,14 @@ struct HashPartitionTest : public testing::Test
       {
         std::cout << partition_offsets[i] << " ";
       }
+
+      std::cout << std::endl;
+
+      for(auto const& c : this->gdf_output_columns){
+        print_gdf_column(c.get());
+      }
+
+
       std::cout << std::endl;
     }
 
@@ -159,7 +177,9 @@ struct HashPartitionTest : public testing::Test
   } 
 
 
-  void verify_gdf_result(int num_partitions, std::vector<int> partition_offsets, bool print = false)
+  void verify_gdf_result(int num_partitions, 
+                         std::vector<int> partition_offsets, 
+                         bool print = false)
   {
 
 
@@ -272,33 +292,34 @@ struct TestParameters
 // The hash function to be used is determined by the gdf_hash_func enum
 // The columns to be hashed to determine the partition assignment are the last N integer template
 // arguments, where N <= the number of columns specified in the VTuple
-typedef ::testing::Types< //TestParameters< VTuple<int32_t>, GDF_HASH_IDENTITY, 0 >,
-                          TestParameters< VTuple<int32_t, int32_t>, GDF_HASH_MURMUR3, 0, 1>
-                          //TestParameters< VTuple<float, double>, GDF_HASH_MURMUR3, 1>,
-                          //TestParameters< VTuple<int64_t, int32_t>, GDF_HASH_MURMUR3, 1>,
-                          //TestParameters< VTuple<int64_t, int64_t>, GDF_HASH_MURMUR3, 0, 1>,
-                          //TestParameters< VTuple<int64_t, int64_t, float, double>, GDF_HASH_IDENTITY, 2, 3>,
-                          //TestParameters< VTuple<uint32_t, double, int32_t, double>, GDF_HASH_MURMUR3, 0, 2, 3>,
-                          //TestParameters< VTuple<int64_t, int64_t, float, double>, GDF_HASH_MURMUR3, 1, 3>,
-                          //TestParameters< VTuple<int64_t, int64_t>, GDF_HASH_MURMUR3, 0, 1>,
-                          //TestParameters< VTuple<float, int32_t>, GDF_HASH_MURMUR3, 0>
+typedef ::testing::Types< TestParameters< VTuple<int32_t>, GDF_HASH_IDENTITY, 0 >,
+                          TestParameters< VTuple<int32_t, int32_t, int64_t>, GDF_HASH_MURMUR3, 0, 1>,
+                          TestParameters< VTuple<float, double>, GDF_HASH_MURMUR3, 1>,
+                          TestParameters< VTuple<int64_t, int32_t>, GDF_HASH_MURMUR3, 1>,
+                          TestParameters< VTuple<int64_t, int64_t>, GDF_HASH_MURMUR3, 0, 1>,
+                          TestParameters< VTuple<int64_t, int64_t, float, double>, GDF_HASH_IDENTITY, 2, 3>,
+                          TestParameters< VTuple<uint32_t, double, int32_t, double>, GDF_HASH_MURMUR3, 0, 2, 3>,
+                          TestParameters< VTuple<int64_t, int64_t, float, double>, GDF_HASH_MURMUR3, 1, 3>,
+                          TestParameters< VTuple<int64_t, int64_t>, GDF_HASH_MURMUR3, 0, 1>,
+                          TestParameters< VTuple<float, int32_t>, GDF_HASH_MURMUR3, 0>
                          >Implementations;
 
 TYPED_TEST_CASE(HashPartitionTest, Implementations);
 
 
-TYPED_TEST(HashPartitionTest, ExampleTest)
+TYPED_TEST(HashPartitionTest, DISALBED_ExampleTest)
 {
   const int num_partitions = 5;
 
-  this->create_input(10, 10, true);
+  bool print = true;
 
-  //std::vector<int> partition_offsets = this->compute_gdf_result(num_partitions);
+  this->create_input(10, 10, print);
 
-  //this->verify_gdf_result(num_partitions, partition_offsets);
+  std::vector<int> partition_offsets = this->compute_gdf_result(num_partitions, print);
+
+  this->verify_gdf_result(num_partitions, partition_offsets);
 }
 
-/*
 
 
 TYPED_TEST(HashPartitionTest, OnePartition)
@@ -345,5 +366,4 @@ TYPED_TEST(HashPartitionTest, 257Partitions)
 
   this->verify_gdf_result(num_partitions, partition_offsets);
 }
-*/
 
