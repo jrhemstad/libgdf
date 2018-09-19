@@ -17,7 +17,7 @@
 #define GDF_TEST_UTILS_H
 
 // See this header for all of the recursive handling of tuples of vectors
-#include "../join/tuple_vectors.h"
+#include "tuple_vectors.h"
 #include <gdf/gdf.h>
 #include <gdf/cffi/functions.h>
 #include <gdf/utils.h>
