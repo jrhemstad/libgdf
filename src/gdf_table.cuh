@@ -74,6 +74,7 @@ struct row_masker
   gdf_valid_type ** column_valid_masks;
 };
 
+
 /* --------------------------------------------------------------------------*/
 /** 
  * @Synopsis  Scatters a validity bitmask.
@@ -118,6 +119,7 @@ void scatter_valid_mask( gdf_valid_type const * const input_mask,
   }
 }
 
+
 /* --------------------------------------------------------------------------*/
 /** 
  * @Synopsis A class provides useful functionality for operating on a set of gdf_columns. 
@@ -150,6 +152,7 @@ public:
     }
 
 
+
     // Copy pointers to each column's data, types, and validity bitmasks 
     // to the device  as contiguous arrays
     device_columns_data.reserve(num_cols);
@@ -165,7 +168,7 @@ public:
       {
         assert(nullptr != current_column->data);
       }
-	
+
       // Compute the size of a row in the table in bytes
       int column_width_bytes{0};
       if(GDF_SUCCESS == get_column_byte_width(current_column, &column_width_bytes))
@@ -246,13 +249,6 @@ public:
     return column_length;
   }
 
-  __device__ bool is_row_valid(size_type row_index) const
-  {
-    const bool row_valid = gdf_is_valid(d_row_valid, row_index);
-
-    return row_valid;
-  }
-
 
   /* --------------------------------------------------------------------------*/
   /** 
@@ -265,6 +261,15 @@ public:
   byte_type get_row_size_bytes() const
   {
     return row_size_bytes;
+  }
+
+
+  
+  __device__ bool is_row_valid(size_type row_index) const
+  {
+    const bool row_valid = gdf_is_valid(d_row_valid, row_index);
+
+    return row_valid;
   }
 
 
@@ -1144,7 +1149,9 @@ gdf_error scatter_column(column_type const * const __restrict__ input_column,
 }
 
 
-  const size_type num_columns; /** The number of columns in the table */
+
+  const size_type num_columns;    /** The number of columns in the table */
+
   size_type column_length{0};     /** The number of rows in the table */
 
   gdf_column ** host_columns{nullptr};  /** The set of gdf_columns that this table wraps */
