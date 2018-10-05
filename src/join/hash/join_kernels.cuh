@@ -135,15 +135,13 @@ __global__ void compute_join_output_size( multimap_type const * const multi_map,
                                           size_type* output_size)
 {
 
-  __shared__ size_type block_counter;
-  block_counter=0;
-  __syncthreads();
 
-#if defined(CUDA_VERSION) && CUDA_VERSION >= 9000
-  __syncwarp();
-#endif
+  typedef cub::BlockReduce<size_type, block_size> BlockReduce;
+  __shared__ typename BlockReduce::TempStorage temp_storage;
 
   size_type probe_row_index = threadIdx.x + blockIdx.x * blockDim.x;
+
+  size_type thread_counter = 0;
 
 #if defined(CUDA_VERSION) && CUDA_VERSION >= 9000
   const unsigned int activemask = __ballot_sync(0xffffffff, probe_row_index < probe_table_num_rows);
@@ -195,7 +193,7 @@ __global__ void compute_join_output_size( multimap_type const * const multi_map,
             {
               // If the rows are equal, then we have found a true match
               found_match = true;
-              atomicAdd(&block_counter,size_type(1)) ;
+              thread_counter++;
             }
             // Continue searching for matching rows until you hit an empty hash map entry
             ++found;
@@ -219,13 +217,16 @@ __global__ void compute_join_output_size( multimap_type const * const multi_map,
           }
 
           if ((join_type == JoinType::LEFT_JOIN) && (!running) && (!found_match)) {
-            atomicAdd(&block_counter,size_type(1));
+            thread_counter++;
           }
         }
       }
   }
 
   __syncthreads();
+
+  // Reduce thread counters to a single block counter
+  size_type block_counter = BlockReduce(temp_storage).Sum(thread_counter);
 
   // Add block counter to global counter
   if (threadIdx.x==0)
