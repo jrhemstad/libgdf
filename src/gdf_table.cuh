@@ -307,9 +307,37 @@ public:
 
     d_row_valid = device_row_valid.data().get();
 
+    // Each column can be gathered in parallel, therefore create a 
+    // separate stream for every column
+    column_streams.resize(num_columns);
+    for(auto & s : column_streams)
+    {
+      cudaStreamCreate(&s);
+    }
+
+    // Each columns validity bit mask can be scattered in parallel,
+    // therefore create a separate stream for each column
+    valid_streams.resize(num_columns);
+    for(auto & s : valid_streams){
+      cudaStreamCreate(&s);
   }
 
-  ~gdf_table(){}
+  }
+
+  ~gdf_table(){
+
+    // Destroy all streams
+    for(auto & s : column_streams)
+    {
+      cudaStreamDestroy(s);
+    }
+    // Destroy all streams
+    for(auto & s : valid_streams)
+    {
+      cudaStreamDestroy(s);
+    }
+  }
+
 
 
   /* --------------------------------------------------------------------------*/
@@ -864,13 +892,6 @@ public:
   {
     gdf_error gdf_status{GDF_SUCCESS};
   
-    // Each column can be gathered in parallel, therefore create a 
-    // separate stream for every column
-    std::vector<cudaStream_t> column_streams(num_columns);
-    for(auto & s : column_streams)
-    {
-      cudaStreamCreate(&s);
-    }
   
     // Scatter columns one by one
     for(size_type i = 0; i < num_columns; ++i)
@@ -938,14 +959,6 @@ public:
         return gdf_status;
     }
   
-    // Synchronize all the streams
-    CUDA_TRY( cudaDeviceSynchronize() );
-  
-    // Destroy all streams
-    for(auto & s : column_streams)
-    {
-      cudaStreamDestroy(s);
-    }
   
     return gdf_status;
   }
@@ -1060,19 +1073,6 @@ gdf_error scatter( gdf_table<size_type> & scattered_output_table,
 {
   gdf_error gdf_status{GDF_SUCCESS};
 
-  // Each column can be scattered in parallel, therefore create a 
-  // separate stream for every column
-  std::vector<cudaStream_t> column_streams(num_columns);
-  for(auto & s : column_streams){
-    cudaStreamCreate(&s);
-  }
-
-  // Each columns validity bit mask can be scattered in parallel,
-  // therefore create a separate stream for each column
-  std::vector<cudaStream_t> valid_streams(num_columns);
-  for(auto & s : valid_streams){
-    cudaStreamCreate(&s);
-  }
 
   // Scatter columns one by one
   for(size_type i = 0; i < num_columns; ++i)
@@ -1159,20 +1159,6 @@ gdf_error scatter( gdf_table<size_type> & scattered_output_table,
 
     if(GDF_SUCCESS != gdf_status)
       return gdf_status;
-  }
-
-  // Synchronize all the streams
-  CUDA_TRY( cudaDeviceSynchronize() );
-
-  // Destroy all streams
-  for(auto & s : column_streams)
-  {
-    cudaStreamDestroy(s);
-  }
-  // Destroy all streams
-  for(auto & s : valid_streams)
-  {
-    cudaStreamDestroy(s);
   }
 
   return gdf_status;
@@ -1340,6 +1326,9 @@ gdf_error scatter_column(column_type const * const __restrict__ input_column,
   size_type row_size_bytes{0};
   thrust::device_vector<byte_type> column_byte_widths;
   byte_type * d_column_byte_widths{nullptr};
+
+  std::vector<cudaStream_t> column_streams;
+  std::vector<cudaStream_t> valid_streams;
 
 };
 
