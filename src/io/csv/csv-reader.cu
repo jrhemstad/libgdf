@@ -56,6 +56,8 @@
 #include "gdf/gdf_io.h"
 #include "../../nvtx_utils.h"
 
+#include "rmm.h"
+
 constexpr int32_t HASH_SEED = 33;
 
 using namespace std;
@@ -441,40 +443,40 @@ gdf_error allocateGdfDataSpace(gdf_column *gdf) {
 	long num_bitmaps = (N + 31) / 8;			// 8 bytes per bitmap
 
 	//--- allocate space for the valid bitmaps
-	CUDA_TRY(cudaMalloc(&gdf->valid, (sizeof(gdf_valid_type) 	* num_bitmaps)));
+	RMM_TRY(rmmAlloc((void**)&gdf->valid, (sizeof(gdf_valid_type) 	* num_bitmaps),0));
 	CUDA_TRY(cudaMemset(gdf->valid, 0, (sizeof(gdf_valid_type) 	* num_bitmaps)) );
 
 	//--- Allocate space for the data
 	switch(gdf->dtype) {
 		case gdf_dtype::GDF_INT8:
-			CUDA_TRY(cudaMalloc(&gdf->data, (sizeof(int8_t) * N)));
+			RMM_TRY(rmmAlloc((void**)&gdf->data, (sizeof(int8_t) * N),0));
 			break;
 		case gdf_dtype::GDF_INT16:
-			CUDA_TRY(cudaMalloc(&gdf->data, (sizeof(int16_t) * N)));
+			RMM_TRY(rmmAlloc((void**)&gdf->data, (sizeof(int16_t) * N),0));
 			break;
 		case gdf_dtype::GDF_INT32:
-			CUDA_TRY(cudaMalloc(&gdf->data, (sizeof(int32_t) * N)));
+			RMM_TRY(rmmAlloc((void**)&gdf->data, (sizeof(int32_t) * N),0));
 			break;
 		case gdf_dtype::GDF_INT64:
-			CUDA_TRY(cudaMalloc(&gdf->data, (sizeof(int64_t) * N)));
+			RMM_TRY(rmmAlloc((void**)&gdf->data, (sizeof(int64_t) * N),0));
 			break;
 		case gdf_dtype::GDF_FLOAT32:
-			CUDA_TRY(cudaMalloc(&gdf->data, (sizeof(float) * N)));
+			RMM_TRY(rmmAlloc((void**)&gdf->data, (sizeof(float) * N),0));
 			break;
 		case gdf_dtype::GDF_FLOAT64:
-			CUDA_TRY(cudaMalloc(&gdf->data, (sizeof(double) * N)));
+			RMM_TRY(rmmAlloc((void**)&gdf->data, (sizeof(double) * N),0));
 			break;
 		case gdf_dtype::GDF_DATE32:
-			CUDA_TRY(cudaMalloc(&gdf->data, (sizeof(gdf_date32) * N)));
+			RMM_TRY(rmmAlloc((void**)&gdf->data, (sizeof(gdf_date32) * N),0));
 			break;
 		case gdf_dtype::GDF_DATE64:
-			CUDA_TRY(cudaMalloc(&gdf->data, (sizeof(gdf_date64) * N)));
+			RMM_TRY(rmmAlloc((void**)&gdf->data, (sizeof(gdf_date64) * N),0));
 			break;
 		case gdf_dtype::GDF_TIMESTAMP:
-			CUDA_TRY(cudaMalloc(&gdf->data, (sizeof(int64_t) * N)));
+			RMM_TRY(rmmAlloc((void**)&gdf->data, (sizeof(int64_t) * N),0));
 			break;
 		case gdf_dtype::GDF_CATEGORY:
-			CUDA_TRY(cudaMalloc(&gdf->data, (sizeof(gdf_category) * N)));
+			RMM_TRY(rmmAlloc((void**)&gdf->data, (sizeof(gdf_category) * N),0));
 			break;
 		case gdf_dtype::GDF_STRING:
 			// Memory for gdf->data allocated by string class eventually
